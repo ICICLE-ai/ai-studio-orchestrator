@@ -1,0 +1,21 @@
+[project]
+name = "ai-studio"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "bentoml>=1.4.35",
+    "dvc>=3.66.1",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.128.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=1.0.0", "ruff>=0.9.0", "pyrefly>=0.19.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.pyrefly]
+project-includes = ["ai_studio/**/*.py"]
+search-path = ["."]

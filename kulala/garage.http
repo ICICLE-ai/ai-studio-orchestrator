@@ -1,0 +1,869 @@
+### Garage Admin API v2
+
+# https://garagehq.deuxfleurs.fr/api/garage-admin-v2.html
+# # Usage: Set your environment variables in .env or kulala env config
+# GARAGE_ADMIN_URL = http://localhost:3903
+# GARAGE_ADMIN_TOKEN = your-admin-bearer-token
+# TAPIS_TOKEN = your-tapis-token (if behind Tapis proxy)
+# ============================================================================
+# CLUSTER
+# ============================================================================
+
+
+### Get Cluster Health
+
+# Detailed health: connected nodes, storage nodes, partition status.
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetClusterHealth HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Cluster Status
+
+# Full status: node IDs, layout version, connected nodes with roles.
+# Use this to grab the node ID for layout configuration.
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetClusterStatus HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Cluster Statistics
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetClusterStatistics HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Connect Cluster Nodes
+
+# Connect to other Garage nodes by specifying <node_id>@<address>.
+
+POST {{GARAGE_ADMIN_URL}}/v2/ConnectClusterNodes HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+[
+  "{{GARAGE_NODE_ID}}""@192.168.1.100:3901"
+]
+
+
+### 
+
+# ============================================================================
+# CLUSTER LAYOUT
+# ============================================================================
+
+
+### Get Cluster Layout
+
+# Returns current layout version, node roles, staged changes.
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetClusterLayout HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Cluster Layout History
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetClusterLayoutHistory HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Update Cluster Layout (Stage Changes)
+
+# @verbose
+
+# Assigns a role to a node. Capacity is in bytes (1073741824 = 1GB).
+# Set capacity to null for a gateway node.
+# Set "remove": true instead to remove a node.
+# NOTE: Get the node ID from GetClusterStatus first!
+
+POST {{GARAGE_ADMIN_URL}}/v2/UpdateClusterLayout HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "roles": [
+    {
+      "capacity": 1073741824,
+      "id": "52278b6a90c4145e36cf911cc7bac15f39d230e47d098cb1f0bc81c346af110e",
+      "tags": [
+        "aistudio"
+      ],
+      "zone": "dc1"
+    }
+  ]
+}
+
+
+### 
+
+
+### Preview Cluster Layout Changes
+
+# Dry-run: computes the new layout without applying it.
+
+POST {{GARAGE_ADMIN_URL}}/v2/PreviewClusterLayoutChanges HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Apply Cluster Layout
+
+# Applies staged changes. Version must be current layout version + 1.
+# Check current version with GetClusterLayout first!
+
+POST {{GARAGE_ADMIN_URL}}/v2/ApplyClusterLayout HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "version": 2
+}
+
+
+### 
+
+
+### Revert Cluster Layout
+
+# Clears all staged layout changes without applying them.
+
+POST {{GARAGE_ADMIN_URL}}/v2/RevertClusterLayout HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Skip Dead Nodes in Layout
+
+# Force layout progress when nodes are permanently gone.
+
+POST {{GARAGE_ADMIN_URL}}/v2/ClusterLayoutSkipDeadNodes HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "allowMissingData": false,
+  "version": 1
+}
+
+
+### 
+
+# ============================================================================
+# ACCESS KEYS
+# ============================================================================
+
+
+### List Keys
+
+GET {{GARAGE_ADMIN_URL}}/v2/ListKeys HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Create Key
+
+POST {{GARAGE_ADMIN_URL}}/v2/CreateKey HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "name": "aistudio-key-2"
+}
+
+
+### 
+
+
+### Get Key Info
+
+# Search by exact ID or partial name/ID with ?search=
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetKeyInfo?id={{S3_ACCESS_KEY}}&showSecretKey=true HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Update Key
+
+# Update key name or permissions (e.g. allow/deny bucket creation).
+
+POST {{GARAGE_ADMIN_URL}}/v2/UpdateKey?id=GKxxxxx HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "allow": {
+    "createBucket": true
+  },
+  "name": "aistudio-key-renamed"
+}
+
+
+### 
+
+
+### Delete Key
+
+# WARNING: Removes key access from all buckets. Buckets are NOT deleted.
+
+POST {{GARAGE_ADMIN_URL}}/v2/DeleteKey?id=GKxxxxx HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Import Key
+
+# For migrations/backup restore ONLY. Do NOT use for custom key IDs.
+
+POST {{GARAGE_ADMIN_URL}}/v2/ImportKey HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "accessKeyId": "GKxxxxx",
+  "name": "imported-key",
+  "secretAccessKey": "xxxxx"
+}
+
+
+### 
+
+# ============================================================================
+# BUCKETS
+# ============================================================================
+
+
+### List Buckets
+
+GET {{GARAGE_ADMIN_URL}}/v2/ListBuckets HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Create Bucket
+
+# Can specify globalAlias, localAlias, or both.
+
+POST {{GARAGE_ADMIN_URL}}/v2/CreateBucket HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "globalAlias": "aistudio-datasets"
+}
+
+
+### 
+
+
+### Create Bucket with Local Alias
+
+# Local alias is scoped to a specific access key.
+
+POST {{GARAGE_ADMIN_URL}}/v2/CreateBucket HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "localAlias": {
+    "accessKeyId": "GKxxxxx",
+    "alias": "my-private-bucket",
+    "allow": {
+      "owner": false,
+      "read": true,
+      "write": true
+    }
+  }
+}
+
+
+### 
+
+
+### Get Bucket Info
+
+# Search by ID, global alias, or partial search string.
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetBucketInfo?globalAlias=aistudio-data HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Update Bucket
+
+# Update website access config and/or quotas.
+# Both maxSize and maxObjects must be set together (or both null to remove).
+
+POST {{GARAGE_ADMIN_URL}}/v2/UpdateBucket?id=BUCKET_ID HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "quotas": {
+    "maxObjects": 100000,
+    "maxSize": 10737418240
+  },
+  "websiteAccess": {
+    "enabled": false
+  }
+}
+
+
+### 
+
+
+### Delete Bucket
+
+# Bucket MUST be empty first. Deletes all aliases too.
+
+POST {{GARAGE_ADMIN_URL}}/v2/DeleteBucket?id=BUCKET_ID HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Cleanup Incomplete Uploads
+
+# Remove multipart uploads older than N seconds.
+
+POST {{GARAGE_ADMIN_URL}}/v2/CleanupIncompleteUploads HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "bucketId": "BUCKET_ID",
+  "olderThanSecs": 86400
+}
+
+
+### 
+
+
+### Inspect Object
+
+# Detailed internal info about an object: versions, blocks, metadata.
+
+GET {{GARAGE_ADMIN_URL}}/v2/InspectObject?bucketId=BUCKET_ID&key=path/to/object.txt HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+# ============================================================================
+# BUCKET ALIASES
+# ============================================================================
+
+
+### Add Global Bucket Alias
+
+POST {{GARAGE_ADMIN_URL}}/v2/AddBucketAlias HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "bucketId": "BUCKET_ID",
+  "globalAlias": "my-new-alias"
+}
+
+
+### 
+
+
+### Add Local Bucket Alias (scoped to a key)
+
+POST {{GARAGE_ADMIN_URL}}/v2/AddBucketAlias HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "accessKeyId": "GKxxxxx",
+  "bucketId": "BUCKET_ID",
+  "localAlias": "my-local-alias"
+}
+
+
+### 
+
+
+### Remove Bucket Alias
+
+POST {{GARAGE_ADMIN_URL}}/v2/RemoveBucketAlias HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "bucketId": "BUCKET_ID",
+  "globalAlias": "alias-to-remove"
+}
+
+
+### 
+
+# ============================================================================
+# PERMISSIONS
+# ============================================================================
+
+
+### Allow Bucket Key
+
+# WARNING: Setting a permission to false does NOT revoke it.
+# It leaves the permission unchanged. Use DenyBucketKey to revoke.
+
+POST {{GARAGE_ADMIN_URL}}/v2/AllowBucketKey HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "accessKeyId": "{{S3_ACCESS_KEY}}",
+  "bucketId": "{{S3_BUCKET_ID}}",
+  "permissions": {
+    "owner": false,
+    "read": true,
+    "write": true
+  }
+}
+
+
+### 
+
+
+### Deny Bucket Key
+
+# WARNING: Setting a permission to false here does NOT re-grant it.
+# Only true values revoke the corresponding permission.
+
+POST {{GARAGE_ADMIN_URL}}/v2/DenyBucketKey HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "accessKeyId": "GKxxxxx",
+  "bucketId": "BUCKET_ID",
+  "permissions": {
+    "owner": true,
+    "read": false,
+    "write": false
+  }
+}
+
+
+### 
+
+# ============================================================================
+# ADMIN API TOKENS (new in v2)
+# ============================================================================
+
+
+### List Admin Tokens
+
+GET {{GARAGE_ADMIN_URL}}/v2/ListAdminTokens HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Create Admin Token
+
+# The secret token is returned ONCE in the response. Save it!
+# Scope can be a list of endpoint names or ["*"] for full access.
+
+POST {{GARAGE_ADMIN_URL}}/v2/CreateAdminToken HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "name": "aistudio-scoped-token",
+  "scope": [
+    "ListBuckets",
+    "GetBucketInfo",
+    "CreateBucket",
+    "ListKeys",
+    "GetKeyInfo",
+    "CreateKey",
+    "AllowBucketKey",
+    "DenyBucketKey"
+  ]
+}
+
+
+### 
+
+
+### Get Admin Token Info
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetAdminTokenInfo?id=TOKEN_ID HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Current Admin Token Info
+
+# Info about the token you're currently using.
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetCurrentAdminTokenInfo HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Update Admin Token
+
+POST {{GARAGE_ADMIN_URL}}/v2/UpdateAdminToken?id=TOKEN_ID HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "name": "renamed-token",
+  "scope": [
+    "*"
+  ]
+}
+
+
+### 
+
+
+### Delete Admin Token
+
+POST {{GARAGE_ADMIN_URL}}/v2/DeleteAdminToken?id=TOKEN_ID HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+# ============================================================================
+# NODE OPERATIONS
+# ============================================================================
+
+
+### Get Node Info
+
+# Use node=self, node=*, or node=<node_id>
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetNodeInfo?node=self HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Node Statistics
+
+GET {{GARAGE_ADMIN_URL}}/v2/GetNodeStatistics?node=self HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Create Metadata Snapshot
+
+POST {{GARAGE_ADMIN_URL}}/v2/CreateMetadataSnapshot?node=self HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Launch Repair Operation
+
+# repairType options: "tables", "blocks", "versions", "multipartUploads",
+# "blockRefs", "blockRc", "rebalance", "scrub"
+
+POST {{GARAGE_ADMIN_URL}}/v2/LaunchRepairOperation?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "repairType": "tables"
+}
+
+
+### 
+
+# ============================================================================
+# BLOCK OPERATIONS
+# ============================================================================
+
+
+### List Block Errors
+
+GET {{GARAGE_ADMIN_URL}}/v2/ListBlockErrors?node=self HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### Get Block Info
+
+POST {{GARAGE_ADMIN_URL}}/v2/GetBlockInfo?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "blockHash": "BLOCK_HASH_HERE"
+}
+
+
+### 
+
+
+### Retry Block Resync (all errored blocks)
+
+POST {{GARAGE_ADMIN_URL}}/v2/RetryBlockResync?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "all": true
+}
+
+
+### 
+
+
+### Retry Block Resync (specific blocks)
+
+POST {{GARAGE_ADMIN_URL}}/v2/RetryBlockResync?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "blockHashes": [
+    "HASH_1",
+    "HASH_2"
+  ]
+}
+
+
+### 
+
+
+### Purge Blocks
+
+# WARNING: Permanently deletes objects referencing these blocks!
+
+POST {{GARAGE_ADMIN_URL}}/v2/PurgeBlocks?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+[
+  "BLOCK_HASH_TO_PURGE"
+]
+
+
+### 
+
+# ============================================================================
+# WORKERS
+# ============================================================================
+
+
+### List Workers (busy only)
+
+POST {{GARAGE_ADMIN_URL}}/v2/ListWorkers?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "busyOnly": true,
+  "errorOnly": false
+}
+
+
+### 
+
+
+### Get Worker Info
+
+POST {{GARAGE_ADMIN_URL}}/v2/GetWorkerInfo?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "id": 0
+}
+
+
+### 
+
+
+### Get Worker Variables
+
+POST {{GARAGE_ADMIN_URL}}/v2/GetWorkerVariable?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{}
+
+
+### 
+
+
+### Set Worker Variable
+
+POST {{GARAGE_ADMIN_URL}}/v2/SetWorkerVariable?node=self HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+{
+  "value": "2",
+  "variable": "resync-tranquility"
+}
+
+
+### 
+
+# ============================================================================
+# METRICS
+# ============================================================================
+
+
+### Prometheus Metrics (may not require auth depending on config)
+
+GET {{GARAGE_ADMIN_URL}}/metrics HTTP/1.1
+Accept: text/plain
+Authorization: Bearer {{GARAGE_ADMIN_TOKEN}}
+X-Tapis-Token: {{TAPIS_TOKEN}}
+
+
+### 
+
+
+### On-Demand TLS Domain Check (no auth)
+
+GET {{GARAGE_ADMIN_URL}}/check?domain=mybucket.s3.garage.localhost HTTP/1.1
+Accept: text/plain

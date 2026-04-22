@@ -1,0 +1,2 @@
+# One accepted project term per line.
+# Harper uses this file as the workspace dictionary.
