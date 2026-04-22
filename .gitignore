@@ -22,5 +22,7 @@ wheels/
 # Kulala
 http-client.env.json
 **/http-client.env.json
+*env.json
+**/*env.json
 kulala/*env.json
 **/kulala/*env.json
