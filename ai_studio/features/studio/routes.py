@@ -12,6 +12,7 @@ from ai_studio.api.dependencies import (
     get_garage_client,
     get_tapis_clients,
 )
+from ai_studio.adapters.tapis.auth import schemas as auth_schemas
 from ai_studio.features.studio.schemas import StudioResponse
 from ai_studio.features.studio.service import StudioService, TapisClients
 
@@ -36,7 +37,7 @@ async def create_studio(
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
-) -> StudioResponse:
+) -> StudioResponse[auth_schemas.TapisUserInfo]:
     user = await service.provision_studio(SecretStr(token))
     return StudioResponse(
         status=status.HTTP_200_OK,
