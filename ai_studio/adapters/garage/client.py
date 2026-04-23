@@ -2,7 +2,7 @@
 
 import httpx
 import tomlkit
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, SecretStr, TypeAdapter, ValidationError
 
 from ai_studio.core.retry import with_retry
 from ai_studio.exceptions import (
@@ -41,7 +41,7 @@ class GarageClient:
         method: str,
         url: str,
         response_model: type[T],
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
         json_data: dict | None = None,
     ) -> T:
@@ -52,7 +52,9 @@ class GarageClient:
                 url=url,
                 json=json_data,
                 headers={
-                    "Authorization": f"Bearer {garage_admin_token}",
+                    "Authorization": (
+                        f"Bearer {garage_admin_token.get_secret_value()}"
+                    ),
                     "X-Tapis-Token": tapis_token,
                 },
             )
@@ -85,7 +87,10 @@ class GarageClient:
             )
 
     def generate_garage_config(
-        self, rpc_secret: str, admin_token: str, metrics_token: str
+        self,
+        rpc_secret: SecretStr,
+        admin_token: SecretStr,
+        metrics_token: SecretStr,
     ) -> str:
         """Generate a Garage TOML configuration with runtime credentials."""
         doc = tomlkit.document()
@@ -99,7 +104,7 @@ class GarageClient:
             "rpc_public_addr",
             tomlkit.item("aistudiogarage-rpc.pods.icicleai.tapis.io:3901"),
         )
-        doc.add("rpc_secret", tomlkit.item(rpc_secret))
+        doc.add("rpc_secret", tomlkit.item(rpc_secret.get_secret_value()))
 
         s3_api = tomlkit.table()
         s3_api.add("s3_region", tomlkit.item("garage"))
@@ -121,14 +126,14 @@ class GarageClient:
 
         admin = tomlkit.table()
         admin.add("api_bind_addr", tomlkit.item("[::]:3903"))
-        admin.add("admin_token", tomlkit.item(admin_token))
-        admin.add("metrics_token", tomlkit.item(metrics_token))
+        admin.add("admin_token", tomlkit.item(admin_token.get_secret_value()))
+        admin.add("metrics_token", tomlkit.item(metrics_token.get_secret_value()))
         doc.add("admin", admin)
 
         return tomlkit.dumps(doc)
 
     async def get_health(
-        self, client: httpx.AsyncClient, garage_admin_token: str, tapis_token: str
+        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: str
     ) -> GetGarageHealthResponse:
         return await self._make_request(
             client=client,
@@ -140,7 +145,7 @@ class GarageClient:
         )
 
     async def get_cluster_status(
-        self, client: httpx.AsyncClient, garage_admin_token: str, tapis_token: str
+        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: str
     ) -> GetGarageClusterStatusResponse:
         return await self._make_request(
             client=client,
@@ -155,7 +160,7 @@ class GarageClient:
         self,
         payload: UpdateGarageClusterLayoutPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> UpdateGarageClusterLayoutResponse:
         return await self._make_request(
@@ -171,7 +176,7 @@ class GarageClient:
     async def get_cluster_layout(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> UpdateGarageClusterLayoutResponse:
         return await self._make_request(
@@ -187,7 +192,7 @@ class GarageClient:
         self,
         payload: ApplyGarageClusterLayoutPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> ApplyGarageClusterLayoutResponse:
         return await self._make_request(
@@ -204,7 +209,7 @@ class GarageClient:
         self,
         payload: CreateGarageKeyPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> CreateGarageKeyResponse:
         return await self._make_request(
@@ -221,7 +226,7 @@ class GarageClient:
         self,
         payload: CreateGarageBucketPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> CreateGarageBucketResponse:
         return await self._make_request(
@@ -238,7 +243,7 @@ class GarageClient:
         self,
         payload: AllowGarageBucketKeyPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> AllowGarageBucketKeyResponse:
         return await self._make_request(
@@ -256,7 +261,7 @@ class GarageClient:
         client: httpx.AsyncClient,
         url: str,
         item_type: type,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> list:
         """Send a GET request to a Garage list endpoint that returns a JSON array."""
@@ -265,7 +270,9 @@ class GarageClient:
                 method="GET",
                 url=url,
                 headers={
-                    "Authorization": f"Bearer {garage_admin_token}",
+                    "Authorization": (
+                        f"Bearer {garage_admin_token.get_secret_value()}"
+                    ),
                     "X-Tapis-Token": tapis_token,
                 },
             )
@@ -301,7 +308,7 @@ class GarageClient:
     async def list_keys(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> list[ListGarageKeysResponseItem]:
         return await self._make_list_request(
@@ -315,7 +322,7 @@ class GarageClient:
     async def list_buckets(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> list[ListGarageBucketsResponseItem]:
         return await self._make_list_request(
@@ -330,7 +337,7 @@ class GarageClient:
         self,
         payload: DeleteGarageKeyPayload,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
     ) -> None:
         """Delete a Garage access key."""
@@ -339,7 +346,9 @@ class GarageClient:
                 method="POST",
                 url=f"/v2/DeleteKey?id={payload.accessKeyId}",
                 headers={
-                    "Authorization": f"Bearer {garage_admin_token}",
+                    "Authorization": (
+                        f"Bearer {garage_admin_token.get_secret_value()}"
+                    ),
                     "X-Tapis-Token": tapis_token,
                 },
             )
@@ -363,7 +372,7 @@ class GarageClient:
     async def _ensure_layout(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
         layout_zone: str,
         layout_capacity: int,
@@ -413,7 +422,7 @@ class GarageClient:
     async def _configure_bucket(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
         key_name: str,
         bucket_alias: str,
@@ -475,7 +484,7 @@ class GarageClient:
         )
 
         return GarageBucketCredentials(
-            access_key_id=key.accessKeyId,
+            access_key_id=SecretStr(key.accessKeyId),
             secret_access_key=key.secretAccessKey,
             bucket_id=bucket_id,
         )
@@ -483,7 +492,7 @@ class GarageClient:
     async def configure_artifacts(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
         key_name: str = "aistudio-artifacts-key",
         bucket_alias: str = "aistudio-artifacts",
@@ -504,7 +513,7 @@ class GarageClient:
     async def configure_datasets(
         self,
         client: httpx.AsyncClient,
-        garage_admin_token: str,
+        garage_admin_token: SecretStr,
         tapis_token: str,
         key_name: str = "aistudio-datasets-key",
         bucket_alias: str = "aistudio-datasets",

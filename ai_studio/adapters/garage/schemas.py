@@ -1,6 +1,6 @@
 """Pydantic schemas for Garage cluster layout payloads and responses."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class UpdateGarageClusterLayoutRolePayload(BaseModel):
@@ -99,7 +99,7 @@ class CreateGarageKeyResponse(BaseModel):
     name: str
     expiration: str | None = None
     expired: bool
-    secretAccessKey: str
+    secretAccessKey: SecretStr
     permissions: GarageKeyPermissions
     buckets: list[str] = Field(default_factory=list)
 
@@ -170,6 +170,6 @@ class DeleteGarageKeyPayload(BaseModel):
 class GarageBucketCredentials(BaseModel):
     """Credentials for a single Garage bucket."""
 
-    access_key_id: str
-    secret_access_key: str
+    access_key_id: SecretStr
+    secret_access_key: SecretStr
     bucket_id: str

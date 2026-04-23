@@ -1,5 +1,6 @@
 """Application configuration models and environment-backed settings."""
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +34,7 @@ class TapisSettings(BaseSettings):
         env_file=".env", env_prefix="TAPIS_", extra="ignore"
     )
 
-    admin_token: str
+    admin_token: SecretStr
     base_url: str
     tenant: str
 

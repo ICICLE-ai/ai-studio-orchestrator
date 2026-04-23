@@ -3,7 +3,7 @@
 from enum import StrEnum, auto
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class TapisPodStatus(StrEnum):
@@ -127,7 +127,7 @@ class TapisPodCredentials(BaseModel):
     """Auto-generated credentials for a template-based Tapis pod."""
 
     user_username: str
-    user_password: str
+    user_password: SecretStr
 
 
 class TapisPodCredentialsApiResponse(BaseModel):

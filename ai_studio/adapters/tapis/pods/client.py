@@ -37,7 +37,7 @@ class TapisPodsClient:
                 method=method,
                 url=url,
                 json=json_data,
-                headers={"X-Tapis-Token": tapis_config.admin_token},
+                headers={"X-Tapis-Token": tapis_config.admin_token.get_secret_value()},
             )
             if response.status_code not in (200, 201):
                 raise UpstreamServiceError(

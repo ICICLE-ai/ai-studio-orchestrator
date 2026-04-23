@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import secrets
 
 from httpx import AsyncClient
+from pydantic import SecretStr
 
 from ai_studio.adapters.garage import GarageClient
 from ai_studio.adapters.tapis.auth import TapisAuthClient
@@ -14,6 +15,7 @@ from ai_studio.adapters.tapis.vaults import TapisVaultClient
 from ai_studio.adapters.tapis.vaults import schemas as vault_schemas
 from ai_studio.core import tapis_config
 from ai_studio.exceptions import UpstreamServiceError
+
 GARAGE_ADMIN_SECRET_ID = "aistudio-garage-admin"
 GARAGE_ARTIFACTS_SECRET_ID = "aistudio-garage-artifacts"
 GARAGE_DATASETS_SECRET_ID = "aistudio-garage-datasets"
@@ -200,7 +202,7 @@ class StudioService:
 
     async def _ensure_garage_admin_secret(
         self, token: str, username: str
-    ) -> tuple[str, str, str]:
+    ) -> tuple[SecretStr, SecretStr, SecretStr]:
         try:
             vault_admin = await self._tapis.vault.read_secret(
                 secret_id=GARAGE_ADMIN_SECRET_ID,
@@ -208,26 +210,26 @@ class StudioService:
                 client=self._tapis_client,
             )
             return (
-                vault_admin.result.secretMap["rpc_secret"],
-                vault_admin.result.secretMap["admin_token"],
-                vault_admin.result.secretMap["metrics_token"],
+                SecretStr(vault_admin.result.secretMap["rpc_secret"]),
+                SecretStr(vault_admin.result.secretMap["admin_token"]),
+                SecretStr(vault_admin.result.secretMap["metrics_token"]),
             )
         except UpstreamServiceError as error:
             if error.status_code != 404:
                 raise
 
-        rpc_secret = secrets.token_hex(32)
-        admin_token = secrets.token_hex(32)
-        metrics_token = secrets.token_hex(32)
+        rpc_secret = SecretStr(secrets.token_hex(32))
+        admin_token = SecretStr(secrets.token_hex(32))
+        metrics_token = SecretStr(secrets.token_hex(32))
         await self._tapis.vault.write_secret(
             secret_id=GARAGE_ADMIN_SECRET_ID,
             secret=vault_schemas.WriteTapisSecret(
                 tenant=tapis_config.tenant,
                 user=username,
                 data={
-                    "rpc_secret": rpc_secret,
-                    "admin_token": admin_token,
-                    "metrics_token": metrics_token,
+                    "rpc_secret": rpc_secret.get_secret_value(),
+                    "admin_token": admin_token.get_secret_value(),
+                    "metrics_token": metrics_token.get_secret_value(),
                 },
             ),
             token=token,
@@ -241,7 +243,7 @@ class StudioService:
         token: str,
         username: str,
         garage_base_url: str,
-        admin_token: str,
+        admin_token: SecretStr,
         bucket_kind: str,
     ) -> dict[str, str]:
         try:
@@ -270,8 +272,8 @@ class StudioService:
                 )
 
         data = {
-            "access_key_id": credentials.access_key_id,
-            "secret_access_key": credentials.secret_access_key,
+            "access_key_id": credentials.access_key_id.get_secret_value(),
+            "secret_access_key": credentials.secret_access_key.get_secret_value(),
             "bucket_id": credentials.bucket_id,
         }
         await self._tapis.vault.write_secret(
@@ -292,7 +294,7 @@ class StudioService:
         db_pod_id: str,
         db_internal_host: str,
         db_username: str,
-        db_password: str,
+        db_password: SecretStr,
         garage_internal_host: str,
         artifacts_credentials: dict[str, str],
         pip_cache_volume_id: str,
@@ -321,7 +323,7 @@ class StudioService:
             ],
             environment_variables={
                 "MLFLOW_BACKEND_STORE_URI": (
-                    f"postgresql://{db_username}:{db_password}"
+                    f"postgresql://{db_username}:{db_password.get_secret_value()}"
                     f"@{db_internal_host}:5432/{db_pod_id}"
                 ),
                 "MLFLOW_S3_ENDPOINT_URL": f"http://{garage_internal_host}:3900",
@@ -365,7 +367,7 @@ class StudioService:
     async def _create_prometheus_pod(
         self,
         username: str,
-        metrics_token: str,
+        metrics_token: SecretStr,
         garage_internal_host: str,
         prometheus_volume_id: str,
     ):
@@ -379,7 +381,7 @@ class StudioService:
             "    metrics_path: /metrics\n"
             "    scheme: http\n"
             "    authorization:\n"
-            f"      credentials: {metrics_token}\n"
+            f"      credentials: {metrics_token.get_secret_value()}\n"
             "    static_configs:\n"
             f"      - targets: ['{garage_internal_host}:3903']\n"
         )
