@@ -1,4 +1,4 @@
-"""Client wrapper for reading and writing user secrets through Tapis Vault APIs."""
+"""Client for reading and writing user secrets through Tapis Vault APIs."""
 
 import httpx
 from pydantic import BaseModel, SecretStr, ValidationError

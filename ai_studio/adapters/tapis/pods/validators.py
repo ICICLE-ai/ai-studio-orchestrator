@@ -28,8 +28,8 @@ _CRON_FIELDS: list[tuple[str, int, int, set[str]]] = [
 ]
 
 
-def _validate_cron_field(token: str, name: str, lo: int, hi: int, names: set[str]) -> None:
-    for item in token.split(","):
+def _validate_cron_field(value: str, name: str, lo: int, hi: int, names: set[str]) -> None:
+    for item in value.split(","):
         parts = item.split("/")
         if len(parts) > 2:
             raise ValueError(f"invalid step expression '{item}' in {name} field")
@@ -69,8 +69,8 @@ def is_cron_string(value: str) -> str:
         raise ValueError(
             f"cron expression must have exactly 5 fields (minute hour day_of_month month day_of_week), got {len(fields)}"
         )
-    for token, (name, lo, hi, names) in zip(fields, _CRON_FIELDS):
-        _validate_cron_field(token, name, lo, hi, names)
+    for value, (name, lo, hi, names) in zip(fields, _CRON_FIELDS):
+        _validate_cron_field(value, name, lo, hi, names)
     return value
 
 
