@@ -1,7 +1,7 @@
 """Authentication helpers for validating Tapis user tokens."""
 
 import httpx
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from ai_studio.core import tapis_config
 from ai_studio.exceptions import (
@@ -18,7 +18,7 @@ from ai_studio.adapters.tapis.auth.schemas import (
 class TapisAuthClient:
     """Utilities for validating bearer tokens against Tapis OAuth APIs."""
 
-    async def validate_token(self, token: str) -> TapisUserInfo:
+    async def validate_token(self, token: SecretStr) -> TapisUserInfo:
         """Validate a Tapis token and return the corresponding user payload.
 
         Args:
@@ -33,7 +33,8 @@ class TapisAuthClient:
             InvalidResponseError: If the auth service returns an unparseable response.
         """
         async with httpx.AsyncClient(
-            base_url=tapis_config.base_url, headers={"X-Tapis-Token": token}
+            base_url=tapis_config.base_url,
+            headers={"X-Tapis-Token": token.get_secret_value()},
         ) as client:
             try:
                 response: httpx.Response = await client.get(url="/v3/oauth2/userinfo")

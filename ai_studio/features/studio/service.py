@@ -43,7 +43,7 @@ class StudioService:
         self._garage = garage
         self._tapis_client = tapis_client
 
-    async def provision_studio(self, token: str) -> auth_schemas.TapisUserInfo:
+    async def provision_studio(self, token: SecretStr) -> auth_schemas.TapisUserInfo:
         """Provision initial AI Studio resources for the authenticated user."""
 
         user = await self._tapis.auth.validate_token(token)
@@ -201,7 +201,7 @@ class StudioService:
         )
 
     async def _ensure_garage_admin_secret(
-        self, token: str, username: str
+        self, token: SecretStr, username: str
     ) -> tuple[SecretStr, SecretStr, SecretStr]:
         try:
             vault_admin = await self._tapis.vault.read_secret(
@@ -240,7 +240,7 @@ class StudioService:
     async def _ensure_garage_bucket_secret(
         self,
         secret_id: str,
-        token: str,
+        token: SecretStr,
         username: str,
         garage_base_url: str,
         admin_token: SecretStr,

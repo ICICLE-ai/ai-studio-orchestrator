@@ -1,7 +1,7 @@
 """Client wrapper for reading and writing user secrets through Tapis Vault APIs."""
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 
 from ai_studio.exceptions import (
     InvalidResponseError,
@@ -23,7 +23,7 @@ class TapisVaultClient:
         client: httpx.AsyncClient,
         method: str,
         url: str,
-        token: str,
+        token: SecretStr,
         response_model: type[T],
         json_data: dict | None = None,
     ) -> T:
@@ -33,7 +33,7 @@ class TapisVaultClient:
                 method=method,
                 url=url,
                 json=json_data,
-                headers={"X-Tapis-Token": token},
+                headers={"X-Tapis-Token": token.get_secret_value()},
             )
             if response.status_code not in (200, 201):
                 raise UpstreamServiceError(
@@ -64,7 +64,7 @@ class TapisVaultClient:
             )
 
     async def read_secret(
-        self, secret_id: str, token: str, client: httpx.AsyncClient
+        self, secret_id: str, token: SecretStr, client: httpx.AsyncClient
     ) -> ReadTapisSecretResponse:
         return await self._make_request(
             client=client,
@@ -78,7 +78,7 @@ class TapisVaultClient:
         self,
         secret_id: str,
         secret: WriteTapisSecret,
-        token: str,
+        token: SecretStr,
         client: httpx.AsyncClient,
     ) -> WriteTapisSecretResponse:
         return await self._make_request(

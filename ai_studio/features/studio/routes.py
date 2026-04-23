@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Security, status
 from fastapi.security import APIKeyHeader
 from httpx import AsyncClient
+from pydantic import SecretStr
 
 from ai_studio.api.dependencies import (
     get_client,
@@ -36,7 +37,7 @@ async def create_studio(
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
 ) -> StudioResponse:
-    user = await service.provision_studio(token)
+    user = await service.provision_studio(SecretStr(token))
     return StudioResponse(
         status=status.HTTP_200_OK,
         version=1,

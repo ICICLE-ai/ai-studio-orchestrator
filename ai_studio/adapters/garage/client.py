@@ -42,7 +42,7 @@ class GarageClient:
         url: str,
         response_model: type[T],
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
         json_data: dict | None = None,
     ) -> T:
         """Send an HTTP request to Garage and validate the response payload."""
@@ -55,7 +55,7 @@ class GarageClient:
                     "Authorization": (
                         f"Bearer {garage_admin_token.get_secret_value()}"
                     ),
-                    "X-Tapis-Token": tapis_token,
+                    "X-Tapis-Token": tapis_token.get_secret_value(),
                 },
             )
             if response.status_code not in (200, 201):
@@ -133,7 +133,7 @@ class GarageClient:
         return tomlkit.dumps(doc)
 
     async def get_health(
-        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: str
+        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: SecretStr
     ) -> GetGarageHealthResponse:
         return await self._make_request(
             client=client,
@@ -145,7 +145,7 @@ class GarageClient:
         )
 
     async def get_cluster_status(
-        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: str
+        self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: SecretStr
     ) -> GetGarageClusterStatusResponse:
         return await self._make_request(
             client=client,
@@ -161,7 +161,7 @@ class GarageClient:
         payload: UpdateGarageClusterLayoutPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> UpdateGarageClusterLayoutResponse:
         return await self._make_request(
             client=client,
@@ -177,7 +177,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> UpdateGarageClusterLayoutResponse:
         return await self._make_request(
             client=client,
@@ -193,7 +193,7 @@ class GarageClient:
         payload: ApplyGarageClusterLayoutPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> ApplyGarageClusterLayoutResponse:
         return await self._make_request(
             client=client,
@@ -210,7 +210,7 @@ class GarageClient:
         payload: CreateGarageKeyPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> CreateGarageKeyResponse:
         return await self._make_request(
             client=client,
@@ -227,7 +227,7 @@ class GarageClient:
         payload: CreateGarageBucketPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> CreateGarageBucketResponse:
         return await self._make_request(
             client=client,
@@ -244,7 +244,7 @@ class GarageClient:
         payload: AllowGarageBucketKeyPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> AllowGarageBucketKeyResponse:
         return await self._make_request(
             client=client,
@@ -262,7 +262,7 @@ class GarageClient:
         url: str,
         item_type: type,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> list:
         """Send a GET request to a Garage list endpoint that returns a JSON array."""
         try:
@@ -273,7 +273,7 @@ class GarageClient:
                     "Authorization": (
                         f"Bearer {garage_admin_token.get_secret_value()}"
                     ),
-                    "X-Tapis-Token": tapis_token,
+                    "X-Tapis-Token": tapis_token.get_secret_value(),
                 },
             )
             if response.status_code not in (200, 201):
@@ -309,7 +309,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> list[ListGarageKeysResponseItem]:
         return await self._make_list_request(
             client=client,
@@ -323,7 +323,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> list[ListGarageBucketsResponseItem]:
         return await self._make_list_request(
             client=client,
@@ -338,7 +338,7 @@ class GarageClient:
         payload: DeleteGarageKeyPayload,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
     ) -> None:
         """Delete a Garage access key."""
         try:
@@ -349,7 +349,7 @@ class GarageClient:
                     "Authorization": (
                         f"Bearer {garage_admin_token.get_secret_value()}"
                     ),
-                    "X-Tapis-Token": tapis_token,
+                    "X-Tapis-Token": tapis_token.get_secret_value(),
                 },
             )
             if response.status_code not in (200, 204):
@@ -373,7 +373,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
         layout_zone: str,
         layout_capacity: int,
     ) -> None:
@@ -423,7 +423,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
         key_name: str,
         bucket_alias: str,
         layout_zone: str,
@@ -493,7 +493,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
         key_name: str = "aistudio-artifacts-key",
         bucket_alias: str = "aistudio-artifacts",
         layout_zone: str = "dc1",
@@ -514,7 +514,7 @@ class GarageClient:
         self,
         client: httpx.AsyncClient,
         garage_admin_token: SecretStr,
-        tapis_token: str,
+        tapis_token: SecretStr,
         key_name: str = "aistudio-datasets-key",
         bucket_alias: str = "aistudio-datasets",
         layout_zone: str = "dc1",
