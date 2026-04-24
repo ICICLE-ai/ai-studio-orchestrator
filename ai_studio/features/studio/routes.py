@@ -31,7 +31,12 @@ def get_studio_service(
     )
 
 
-@router.post("/studio")
+@router.post(
+    "/studio",
+    summary="Provision studio",
+    description="Provision the AI Studio resources for the authenticated user.",
+    response_description="Provisioned studio response envelope.",
+)
 async def create_studio(
     token: Annotated[
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
@@ -47,7 +52,12 @@ async def create_studio(
     )
 
 
-@router.patch("/studio/start")
+@router.patch(
+    "/studio/start",
+    summary="Start studio",
+    description="Start the provisioned AI Studio resources for the authenticated user.",
+    response_description="Studio lifecycle response envelope.",
+)
 async def start_studio(
     token: Annotated[
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
@@ -63,7 +73,12 @@ async def start_studio(
     )
 
 
-@router.patch("/studio/stop")
+@router.patch(
+    "/studio/stop",
+    summary="Stop studio",
+    description="Stop the running AI Studio resources for the authenticated user.",
+    response_description="Studio lifecycle response envelope.",
+)
 async def stop_studio(
     token: Annotated[
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
@@ -79,7 +94,12 @@ async def stop_studio(
     )
 
 
-@router.delete("/studio")
+@router.delete(
+    "/studio",
+    summary="Delete studio",
+    description="Delete the provisioned AI Studio resources for the authenticated user.",
+    response_description="Studio lifecycle response envelope.",
+)
 async def delete_studio(
     token: Annotated[
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))

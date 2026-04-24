@@ -24,7 +24,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await app.state.client.aclose()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="AI Studio Orchestrator",
+    summary="Provisioning and lifecycle API for AI Studio resources.",
+    description=(
+        "The AI Studio Orchestrator provisions, starts, stops, and deletes "
+        "user studio resources and supporting infrastructure."
+    ),
+    version="0.1.0",
+    lifespan=lifespan,
+)
 app.include_router(api_router)
 
 
