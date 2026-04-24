@@ -48,7 +48,7 @@ class StudioService:
     async def provision_studio(self, token: SecretStr) -> auth_schemas.TapisUserInfo:
         """Provision initial AI Studio resources for the authenticated user."""
 
-        user = await self._tapis.auth.validate_token(token)
+        user = await self._tapis.auth.validate_token(token, self._tapis_client)
         rpc_secret, admin_token, metrics_token = await self._ensure_garage_admin_secret(
             token=token,
             username=user.username,
@@ -73,15 +73,6 @@ class StudioService:
             volume_id=f"{user.username}aistudiomlflowpipcache",
             description="Volume for AI Studio MLFlow pip cache.",
         )
-        prometheus_vol = await self._create_volume(
-            volume_id=f"{user.username}aistudioprometheus",
-            description="Volume for AI Studio Prometheus data.",
-        )
-        grafana_vol = await self._create_volume(
-            volume_id=f"{user.username}aistudiografana",
-            description="Volume for AI Studio Grafana data.",
-        )
-
         garage_pod = await self._tapis.pods.get_or_create_pod(
             pod_config=pods_schemas.CreateTapisPod(
                 pod_id=f"{user.username}aistudiogarage",
@@ -187,22 +178,11 @@ class StudioService:
             garage_internal_host=garage_internal_host,
             datasets_credentials=datasets_credentials,
         )
-        prometheus_pod = await self._create_prometheus_pod(
-            username=user.username,
-            metrics_token=metrics_token,
-            garage_internal_host=garage_internal_host,
-            prometheus_volume_id=prometheus_vol.result.volume_id,
-        )
-        await self._create_grafana_pod(
-            username=user.username,
-            prometheus_pod_id=prometheus_pod.result.pod_id,
-            grafana_volume_id=grafana_vol.result.volume_id,
-        )
 
         return user
 
     async def start_studio(self, token: SecretStr) -> StudioLifecycleResult:
-        user = await self._tapis.auth.validate_token(token)
+        user = await self._tapis.auth.validate_token(token, self._tapis_client)
         changed, skipped = await self._run_pod_actions(
             username=user.username,
             pod_ids=self._studio_pod_ids(user.username),
@@ -215,7 +195,7 @@ class StudioService:
         )
 
     async def stop_studio(self, token: SecretStr) -> StudioLifecycleResult:
-        user = await self._tapis.auth.validate_token(token)
+        user = await self._tapis.auth.validate_token(token, self._tapis_client)
         changed, skipped = await self._run_pod_actions(
             username=user.username,
             pod_ids=list(reversed(self._studio_pod_ids(user.username))),
@@ -228,7 +208,7 @@ class StudioService:
         )
 
     async def delete_studio(self, token: SecretStr) -> StudioLifecycleResult:
-        user = await self._tapis.auth.validate_token(token)
+        user = await self._tapis.auth.validate_token(token, self._tapis_client)
         changed, skipped = await self._run_pod_actions(
             username=user.username,
             pod_ids=list(reversed(self._studio_pod_ids(user.username))),
@@ -298,8 +278,6 @@ class StudioService:
             f"{username}aistudiogarage",
             f"{username}aistudiomlflow",
             f"{username}aistudiogateway",
-            f"{username}aistudioprometheus",
-            f"{username}aistudiografana",
         ]
 
     @staticmethod
@@ -308,8 +286,6 @@ class StudioService:
             f"{username}aistudiodb",
             f"{username}aistudiogarage",
             f"{username}aistudiomlflowpipcache",
-            f"{username}aistudioprometheus",
-            f"{username}aistudiografana",
         ]
 
     async def _ensure_garage_admin_secret(
@@ -531,87 +507,3 @@ class StudioService:
             if error.status_code != 404:
                 raise
             await self._tapis.pods.create_pod(gateway_config, self._tapis_client)
-
-    async def _create_prometheus_pod(
-        self,
-        username: str,
-        metrics_token: SecretStr,
-        garage_internal_host: str,
-        prometheus_volume_id: str,
-    ):
-        prometheus_config = (
-            "global:\n"
-            "  scrape_interval: 15s\n"
-            "  evaluation_interval: 15s\n"
-            "\n"
-            "scrape_configs:\n"
-            "  - job_name: garage\n"
-            "    metrics_path: /metrics\n"
-            "    scheme: http\n"
-            "    authorization:\n"
-            f"      credentials: {metrics_token.get_secret_value()}\n"
-            "    static_configs:\n"
-            f"      - targets: ['{garage_internal_host}:3903']\n"
-        )
-        return await self._tapis.pods.get_or_create_pod(
-            pod_config=pods_schemas.CreateTapisPod(
-                pod_id=f"{username}aistudioprometheus",
-                image="prom/prometheus:latest",
-                description="AI Studio Prometheus",
-                volume_mounts={
-                    "/etc/prometheus/prometheus.yml": pods_schemas.TapisVolumeMount(
-                        type="ephemeral",
-                        config_content=prometheus_config,
-                        config_filename="prometheus.yml",
-                    ),
-                    "/prometheus": pods_schemas.TapisVolumeMount(
-                        type="tapisvolume",
-                        source_id=prometheus_volume_id,
-                        sub_path="/data",
-                    ),
-                },
-            ),
-            client=self._tapis_client,
-        )
-
-    async def _create_grafana_pod(
-        self,
-        username: str,
-        prometheus_pod_id: str,
-        grafana_volume_id: str,
-    ) -> None:
-        prometheus_internal_host = (
-            f"pods-tacc-{tapis_config.tenant}-{prometheus_pod_id}"
-        )
-        grafana_datasource_config = (
-            "apiVersion: 1\n"
-            "\n"
-            "datasources:\n"
-            "  - name: Prometheus\n"
-            "    type: prometheus\n"
-            f"    url: http://{prometheus_internal_host}:9090\n"
-            "    access: proxy\n"
-            "    isDefault: true\n"
-        )
-        await self._tapis.pods.get_or_create_pod(
-            pod_config=pods_schemas.CreateTapisPod(
-                pod_id=f"{username}aistudiografana",
-                image="grafana/grafana:latest",
-                description="AI Studio Grafana",
-                volume_mounts={
-                    "/etc/grafana/provisioning/datasources/datasources.yml": (
-                        pods_schemas.TapisVolumeMount(
-                            type="ephemeral",
-                            config_content=grafana_datasource_config,
-                            config_filename="datasources.yml",
-                        )
-                    ),
-                    "/var/lib/grafana": pods_schemas.TapisVolumeMount(
-                        type="tapisvolume",
-                        source_id=grafana_volume_id,
-                        sub_path="/data",
-                    ),
-                },
-            ),
-            client=self._tapis_client,
-        )
