@@ -13,7 +13,7 @@ from ai_studio.api.dependencies import (
     get_tapis_clients,
 )
 from ai_studio.adapters.tapis.auth import schemas as auth_schemas
-from ai_studio.features.studio.schemas import StudioResponse
+from ai_studio.features.studio.schemas import StudioLifecycleResult, StudioResponse
 from ai_studio.features.studio.service import StudioService, TapisClients
 
 router = APIRouter(prefix="/api")
@@ -48,18 +48,48 @@ async def create_studio(
 
 
 @router.patch("/studio/start")
-async def start_studio():
-    """Start previously provisioned studio services."""
-    pass
+async def start_studio(
+    token: Annotated[
+        str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
+    ],
+    service: Annotated[StudioService, Depends(get_studio_service)],
+) -> StudioResponse[StudioLifecycleResult]:
+    result = await service.start_studio(SecretStr(token))
+    return StudioResponse(
+        status=status.HTTP_200_OK,
+        version=1,
+        message="Studio started",
+        result=result,
+    )
 
 
 @router.patch("/studio/stop")
-async def stop_studio():
-    """Stop running studio services for the current user."""
-    pass
+async def stop_studio(
+    token: Annotated[
+        str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
+    ],
+    service: Annotated[StudioService, Depends(get_studio_service)],
+) -> StudioResponse[StudioLifecycleResult]:
+    result = await service.stop_studio(SecretStr(token))
+    return StudioResponse(
+        status=status.HTTP_200_OK,
+        version=1,
+        message="Studio stopped",
+        result=result,
+    )
 
 
 @router.delete("/studio")
-async def delete_studio():
-    """Delete all studio resources associated with the current user."""
-    pass
+async def delete_studio(
+    token: Annotated[
+        str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
+    ],
+    service: Annotated[StudioService, Depends(get_studio_service)],
+) -> StudioResponse[StudioLifecycleResult]:
+    result = await service.delete_studio(SecretStr(token))
+    return StudioResponse(
+        status=status.HTTP_200_OK,
+        version=1,
+        message="Studio deleted",
+        result=result,
+    )

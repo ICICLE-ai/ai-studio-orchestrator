@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import secrets
+from typing import Literal
 
 from httpx import AsyncClient
 from pydantic import SecretStr
@@ -15,6 +16,7 @@ from ai_studio.adapters.tapis.vaults import TapisVaultClient
 from ai_studio.adapters.tapis.vaults import schemas as vault_schemas
 from ai_studio.core import tapis_config
 from ai_studio.exceptions import UpstreamServiceError
+from ai_studio.features.studio.schemas import StudioLifecycleResult
 
 GARAGE_ADMIN_SECRET_ID = "aistudio-garage-admin"
 GARAGE_ARTIFACTS_SECRET_ID = "aistudio-garage-artifacts"
@@ -190,6 +192,46 @@ class StudioService:
 
         return user
 
+    async def start_studio(self, token: SecretStr) -> StudioLifecycleResult:
+        user = await self._tapis.auth.validate_token(token)
+        changed, skipped = await self._run_pod_actions(
+            username=user.username,
+            pod_ids=self._studio_pod_ids(user.username),
+            action="start",
+        )
+        return StudioLifecycleResult(
+            username=user.username,
+            changed=changed,
+            skipped=skipped,
+        )
+
+    async def stop_studio(self, token: SecretStr) -> StudioLifecycleResult:
+        user = await self._tapis.auth.validate_token(token)
+        changed, skipped = await self._run_pod_actions(
+            username=user.username,
+            pod_ids=list(reversed(self._studio_pod_ids(user.username))),
+            action="stop",
+        )
+        return StudioLifecycleResult(
+            username=user.username,
+            changed=changed,
+            skipped=skipped,
+        )
+
+    async def delete_studio(self, token: SecretStr) -> StudioLifecycleResult:
+        user = await self._tapis.auth.validate_token(token)
+        changed, skipped = await self._run_pod_actions(
+            username=user.username,
+            pod_ids=list(reversed(self._studio_pod_ids(user.username))),
+            action="delete",
+        )
+        deleted_volumes, skipped_volumes = await self._delete_volumes(user.username)
+        return StudioLifecycleResult(
+            username=user.username,
+            changed=[*changed, *deleted_volumes],
+            skipped=[*skipped, *skipped_volumes],
+        )
+
     async def _create_volume(self, volume_id: str, description: str):
         return await self._tapis.pods.get_or_create_volume(
             volume_config=pods_schemas.CreateTapisPodVolume(
@@ -199,6 +241,66 @@ class StudioService:
             ),
             client=self._tapis_client,
         )
+
+    async def _run_pod_actions(
+        self,
+        username: str,
+        pod_ids: list[str],
+        action: Literal["start", "stop", "delete"],
+    ) -> tuple[list[str], list[str]]:
+        changed: list[str] = []
+        skipped: list[str] = []
+        action_map = {
+            "start": self._tapis.pods.start_pod,
+            "stop": self._tapis.pods.stop_pod,
+            "delete": self._tapis.pods.delete_pod,
+        }
+        actor = action_map[action]
+
+        for pod_id in pod_ids:
+            try:
+                await actor(pod_id, self._tapis_client)
+                changed.append(pod_id)
+            except UpstreamServiceError as error:
+                if error.status_code == 404:
+                    skipped.append(pod_id)
+                    continue
+                raise
+        return changed, skipped
+
+    async def _delete_volumes(self, username: str) -> tuple[list[str], list[str]]:
+        changed: list[str] = []
+        skipped: list[str] = []
+        for volume_id in self._studio_volume_ids(username):
+            try:
+                await self._tapis.pods.delete_volume(volume_id, self._tapis_client)
+                changed.append(volume_id)
+            except UpstreamServiceError as error:
+                if error.status_code == 404:
+                    skipped.append(volume_id)
+                    continue
+                raise
+        return changed, skipped
+
+    @staticmethod
+    def _studio_pod_ids(username: str) -> list[str]:
+        return [
+            f"{username}aistudiodb",
+            f"{username}aistudiogarage",
+            f"{username}aistudiomlflow",
+            f"{username}aistudioprometheus",
+            f"{username}aistudiografana",
+        ]
+
+    @staticmethod
+    def _studio_volume_ids(username: str) -> list[str]:
+        return [
+            f"{username}aistudiodb",
+            f"{username}aistudiogarage",
+            f"{username}aistudiomlflowpipcache",
+            f"{username}aistudioprometheus",
+            f"{username}aistudiografana",
+        ]
 
     async def _ensure_garage_admin_secret(
         self, token: SecretStr, username: str

@@ -200,3 +200,13 @@ class TapisPodsClient:
             url=f"/v3/pods/{pod_id}",
             response_model=TapisPodApiResponse,
         )
+
+    async def delete_volume(
+        self, volume_id: str, client: httpx.AsyncClient
+    ) -> TapisPodVolumeApiResponse:
+        return await self._make_request(
+            client=client,
+            method="DELETE",
+            url=f"/v3/pods/volumes/{volume_id}",
+            response_model=TapisPodVolumeApiResponse,
+        )
