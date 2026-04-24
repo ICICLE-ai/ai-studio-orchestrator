@@ -41,6 +41,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
                 "aliceaistudiodb",
                 "aliceaistudiogarage",
                 "aliceaistudiomlflow",
+                "aliceaistudiogateway",
                 "aliceaistudioprometheus",
                 "aliceaistudiografana",
             ],
@@ -61,6 +62,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
             [
                 "aliceaistudiografana",
                 "aliceaistudioprometheus",
+                "aliceaistudiogateway",
                 "aliceaistudiomlflow",
                 "aliceaistudiogarage",
                 "aliceaistudiodb",
