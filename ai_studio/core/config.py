@@ -1,5 +1,7 @@
 """Application configuration models and environment-backed settings."""
 
+from pathlib import Path
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,5 +25,7 @@ class TapisSettings(BaseSettings):
     postgres_template: str = "postgres:16@2024-12-04-18:28:04"
     mlflow_image: str = "ghcr.io/mlflow/mlflow"
     datasets_image: str = "ghcr.io/icicle-ai/ai-studio-datasets:latest"
+    traefik_public_host: str = "aistudio.pods.icicleai.tapis.io"
+    traefik_dynamic_dir: Path = Path("/shared/traefik/users")
 
 tapis_config = TapisSettings()

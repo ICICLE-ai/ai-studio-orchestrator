@@ -1,6 +1,7 @@
 """Studio orchestration use cases."""
 
 from dataclasses import dataclass
+from pathlib import Path
 import secrets
 from typing import Literal
 
@@ -178,6 +179,7 @@ class StudioService:
             garage_internal_host=garage_internal_host,
             datasets_credentials=datasets_credentials,
         )
+        self._write_traefik_route_file(user.username)
 
         return user
 
@@ -188,6 +190,7 @@ class StudioService:
             pod_ids=self._studio_pod_ids(user.username),
             action="start",
         )
+        self._write_traefik_route_file(user.username)
         return StudioLifecycleResult(
             username=user.username,
             changed=changed,
@@ -215,6 +218,7 @@ class StudioService:
             action="delete",
         )
         deleted_volumes, skipped_volumes = await self._delete_volumes(user.username)
+        self._remove_traefik_route_file(user.username)
         return StudioLifecycleResult(
             username=user.username,
             changed=[*changed, *deleted_volumes],
@@ -287,6 +291,67 @@ class StudioService:
             f"{username}aistudiogarage",
             f"{username}aistudiomlflowpipcache",
         ]
+
+    @staticmethod
+    def _traefik_route_file_path(username: str) -> Path:
+        return tapis_config.traefik_dynamic_dir / f"{username}.yml"
+
+    def _write_traefik_route_file(self, username: str) -> None:
+        route_file = self._traefik_route_file_path(username)
+        route_file.parent.mkdir(parents=True, exist_ok=True)
+        route_file.write_text(self._render_traefik_route_file(username))
+
+    def _remove_traefik_route_file(self, username: str) -> None:
+        route_file = self._traefik_route_file_path(username)
+        route_file.unlink(missing_ok=True)
+
+    @staticmethod
+    def _render_traefik_route_file(username: str) -> str:
+        datasets_internal_host = (
+            f"pods-tacc-{tapis_config.tenant}-{username}aistudiodatasets"
+        )
+        mlflow_internal_host = (
+            f"pods-tacc-{tapis_config.tenant}-{username}aistudiomlflow"
+        )
+
+        return (
+            "http:\n"
+            "  routers:\n"
+            f"    {username}-datasets:\n"
+            f"      rule: Host(`{tapis_config.traefik_public_host}`) && "
+            f"PathPrefix(`/u/{username}/datasets`)\n"
+            "      entryPoints:\n"
+            "        - web\n"
+            "      middlewares:\n"
+            f"        - strip-{username}-datasets-prefix\n"
+            f"      service: {username}-datasets\n\n"
+            f"    {username}-mlflow:\n"
+            f"      rule: Host(`{tapis_config.traefik_public_host}`) && "
+            f"PathPrefix(`/u/{username}/mlflow`)\n"
+            "      entryPoints:\n"
+            "        - web\n"
+            "      middlewares:\n"
+            f"        - strip-{username}-mlflow-prefix\n"
+            f"      service: {username}-mlflow\n\n"
+            "  middlewares:\n"
+            f"    strip-{username}-datasets-prefix:\n"
+            "      stripPrefix:\n"
+            "        prefixes:\n"
+            f"          - /u/{username}/datasets\n\n"
+            f"    strip-{username}-mlflow-prefix:\n"
+            "      stripPrefix:\n"
+            "        prefixes:\n"
+            f"          - /u/{username}/mlflow\n\n"
+            "  services:\n"
+            f"    {username}-datasets:\n"
+            "      loadBalancer:\n"
+            "        servers:\n"
+            f"          - url: http://{datasets_internal_host}:8000\n\n"
+            f"    {username}-mlflow:\n"
+            "      loadBalancer:\n"
+            "        servers:\n"
+            f"          - url: http://{mlflow_internal_host}:5000\n"
+        )
 
     async def _ensure_garage_admin_secret(
         self, token: SecretStr, username: str

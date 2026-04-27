@@ -1,6 +1,8 @@
 """Tests for studio lifecycle orchestration behavior."""
 
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import AsyncMock
 
@@ -11,6 +13,7 @@ os.environ.setdefault("TAPIS_BASE_URL", "https://tapis.test")
 os.environ.setdefault("TAPIS_TENANT", "testtenant")
 
 from ai_studio.adapters.tapis.auth import schemas as auth_schemas
+from ai_studio.core import tapis_config
 from ai_studio.exceptions import UpstreamServiceError
 from ai_studio.features.studio.service import StudioService, TapisClients
 
@@ -33,7 +36,17 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         )
         tapis.pods.start_pod = AsyncMock()
 
-        result = await service.start_studio(SecretStr("user-token"))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_dir = tapis_config.traefik_dynamic_dir
+            tapis_config.traefik_dynamic_dir = Path(tmpdir)
+            try:
+                result = await service.start_studio(SecretStr("user-token"))
+                route_file = Path(tmpdir) / "alice.yml"
+                self.assertTrue(route_file.exists())
+                self.assertIn("/u/alice/datasets", route_file.read_text())
+                self.assertIn("/u/alice/mlflow", route_file.read_text())
+            finally:
+                tapis_config.traefik_dynamic_dir = old_dir
 
         self.assertEqual(
             result.changed,
@@ -83,9 +96,36 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         tapis.pods.delete_pod = AsyncMock(side_effect=delete_pod)
         tapis.pods.delete_volume = AsyncMock(side_effect=delete_volume)
 
-        result = await service.delete_studio(SecretStr("user-token"))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_dir = tapis_config.traefik_dynamic_dir
+            tapis_config.traefik_dynamic_dir = Path(tmpdir)
+            route_file = Path(tmpdir) / "alice.yml"
+            route_file.write_text("stale route")
+            try:
+                result = await service.delete_studio(SecretStr("user-token"))
+                self.assertFalse(route_file.exists())
+            finally:
+                tapis_config.traefik_dynamic_dir = old_dir
 
         self.assertIn("aliceaistudiodb", result.skipped)
         self.assertIn("aliceaistudiodatasets", result.skipped)
         self.assertIn("aliceaistudiogarage", result.changed)
         self.assertIn("aliceaistudiomlflowpipcache", result.changed)
+
+    def test_render_traefik_route_file_uses_expected_paths(self):
+        old_host = tapis_config.traefik_public_host
+        try:
+            tapis_config.traefik_public_host = "aistudio.pods.icicleai.tapis.io"
+            rendered = StudioService._render_traefik_route_file("alice")
+        finally:
+            tapis_config.traefik_public_host = old_host
+
+        self.assertIn("Host(`aistudio.pods.icicleai.tapis.io`)", rendered)
+        self.assertIn("PathPrefix(`/u/alice/datasets`)", rendered)
+        self.assertIn("PathPrefix(`/u/alice/mlflow`)", rendered)
+        self.assertIn(
+            "http://pods-tacc-testtenant-aliceaistudiodatasets:8000", rendered
+        )
+        self.assertIn(
+            "http://pods-tacc-testtenant-aliceaistudiomlflow:5000", rendered
+        )
