@@ -76,7 +76,7 @@ class StudioService:
         garage_pod = await self._tapis.pods.get_or_create_pod(
             pod_config=pods_schemas.CreateTapisPod(
                 pod_id=f"{user.username}aistudiogarage",
-                image="dxflrs/garage:090dbb412aff0afcbd42183ec12fa62c15bde58b",
+                image=tapis_config.garage_image,
                 description="AI Studio Garage S3 Storage",
                 volume_mounts={
                     "/etc/garage.toml": pods_schemas.TapisVolumeMount(
@@ -137,7 +137,7 @@ class StudioService:
         db_pod = await self._tapis.pods.get_or_create_pod(
             pod_config=pods_schemas.CreateTapisPod(
                 pod_id=f"{user.username}aistudiodb",
-                template="postgres:16@2024-12-04-18:28:04",
+                template=tapis_config.postgres_template,
                 description="AI Studio shared PostgreSQL database",
                 volume_mounts={
                     "/var/lib/postgresql/data": pods_schemas.TapisVolumeMount(
@@ -389,7 +389,7 @@ class StudioService:
     ) -> None:
         mlflow_config = pods_schemas.CreateTapisPod(
             pod_id=f"{username}aistudiomlflow",
-            image="ghcr.io/mlflow/mlflow",
+            image=tapis_config.mlflow_image,
             description="AI Studio MLFlow",
             command=[
                 "/bin/bash",

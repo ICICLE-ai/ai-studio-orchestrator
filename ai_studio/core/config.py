@@ -19,6 +19,9 @@ class TapisSettings(BaseSettings):
     admin_token: SecretStr
     base_url: str
     tenant: str
+    garage_image: str = "dxflrs/garage:090dbb412aff0afcbd42183ec12fa62c15bde58b"
+    postgres_template: str = "postgres:16@2024-12-04-18:28:04"
+    mlflow_image: str = "ghcr.io/mlflow/mlflow"
     datasets_image: str = "ghcr.io/icicle-ai/ai-studio-datasets:latest"
 
 tapis_config = TapisSettings()
