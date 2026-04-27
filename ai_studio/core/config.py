@@ -19,6 +19,6 @@ class TapisSettings(BaseSettings):
     admin_token: SecretStr
     base_url: str
     tenant: str
-    platform_image: str = "ghcr.io/icicle-ai/ai-studio-platform:latest"
+    datasets_image: str = "ghcr.io/icicle-ai/ai-studio-datasets:latest"
 
 tapis_config = TapisSettings()

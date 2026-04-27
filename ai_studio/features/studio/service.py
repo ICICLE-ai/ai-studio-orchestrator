@@ -169,7 +169,7 @@ class StudioService:
             artifacts_credentials=artifacts_credentials,
             pip_cache_volume_id=mlflow_pip_cache_vol.result.volume_id,
         )
-        await self._upsert_platform_pod(
+        await self._upsert_datasets_pod(
             username=user.username,
             db_pod_id=db_pod.result.pod_id,
             db_internal_host=db_internal_host,
@@ -277,7 +277,7 @@ class StudioService:
             f"{username}aistudiodb",
             f"{username}aistudiogarage",
             f"{username}aistudiomlflow",
-            f"{username}aistudioplatform",
+            f"{username}aistudiodatasets",
         ]
 
     @staticmethod
@@ -452,7 +452,7 @@ class StudioService:
                 raise
             await self._tapis.pods.create_pod(mlflow_config, self._tapis_client)
 
-    async def _upsert_platform_pod(
+    async def _upsert_datasets_pod(
         self,
         username: str,
         db_pod_id: str,
@@ -462,10 +462,10 @@ class StudioService:
         garage_internal_host: str,
         datasets_credentials: dict[str, str],
     ) -> None:
-        platform_config = pods_schemas.CreateTapisPod(
-            pod_id=f"{username}aistudioplatform",
-            image=tapis_config.platform_image,
-            description="AI Studio Platform",
+        datasets_config = pods_schemas.CreateTapisPod(
+            pod_id=f"{username}aistudiodatasets",
+            image=tapis_config.datasets_image,
+            description="AI Studio Datasets",
             environment_variables={
                 "AI_STUDIO_DATABASE_URL": (
                     f"postgresql+asyncpg://{db_username}:{db_password.get_secret_value()}"
@@ -493,13 +493,13 @@ class StudioService:
         )
 
         try:
-            await self._tapis.pods.get_pod(platform_config.pod_id, self._tapis_client)
+            await self._tapis.pods.get_pod(datasets_config.pod_id, self._tapis_client)
             await self._tapis.pods.update_pod(
-                pod_id=platform_config.pod_id,
-                pod_config=platform_config,
+                pod_id=datasets_config.pod_id,
+                pod_config=datasets_config,
                 client=self._tapis_client,
             )
         except UpstreamServiceError as error:
             if error.status_code != 404:
                 raise
-            await self._tapis.pods.create_pod(platform_config, self._tapis_client)
+            await self._tapis.pods.create_pod(datasets_config, self._tapis_client)
