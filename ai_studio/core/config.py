@@ -19,6 +19,6 @@ class TapisSettings(BaseSettings):
     admin_token: SecretStr
     base_url: str
     tenant: str
-    gateway_image: str = "ghcr.io/icicle-ai/ai-studio-gateway:latest"
+    platform_image: str = "ghcr.io/icicle-ai/ai-studio-platform:latest"
 
 tapis_config = TapisSettings()

@@ -41,7 +41,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
                 "aliceaistudiodb",
                 "aliceaistudiogarage",
                 "aliceaistudiomlflow",
-                "aliceaistudiogateway",
+                "aliceaistudioplatform",
             ],
         )
         self.assertEqual(result.skipped, [])
@@ -58,7 +58,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             result.changed,
             [
-                "aliceaistudiogateway",
+                "aliceaistudioplatform",
                 "aliceaistudiomlflow",
                 "aliceaistudiogarage",
                 "aliceaistudiodb",
@@ -73,7 +73,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         )
 
         async def delete_pod(pod_id, client):
-            if pod_id == "aliceaistudiogateway":
+            if pod_id == "aliceaistudioplatform":
                 raise UpstreamServiceError(status_code=404, detail={"message": "missing"})
 
         async def delete_volume(volume_id, client):
@@ -86,6 +86,6 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         result = await service.delete_studio(SecretStr("user-token"))
 
         self.assertIn("aliceaistudiodb", result.skipped)
-        self.assertIn("aliceaistudiogateway", result.skipped)
+        self.assertIn("aliceaistudioplatform", result.skipped)
         self.assertIn("aliceaistudiogarage", result.changed)
         self.assertIn("aliceaistudiomlflowpipcache", result.changed)

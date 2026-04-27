@@ -169,7 +169,7 @@ class StudioService:
             artifacts_credentials=artifacts_credentials,
             pip_cache_volume_id=mlflow_pip_cache_vol.result.volume_id,
         )
-        await self._upsert_gateway_pod(
+        await self._upsert_platform_pod(
             username=user.username,
             db_pod_id=db_pod.result.pod_id,
             db_internal_host=db_internal_host,
@@ -277,7 +277,7 @@ class StudioService:
             f"{username}aistudiodb",
             f"{username}aistudiogarage",
             f"{username}aistudiomlflow",
-            f"{username}aistudiogateway",
+            f"{username}aistudioplatform",
         ]
 
     @staticmethod
@@ -452,7 +452,7 @@ class StudioService:
                 raise
             await self._tapis.pods.create_pod(mlflow_config, self._tapis_client)
 
-    async def _upsert_gateway_pod(
+    async def _upsert_platform_pod(
         self,
         username: str,
         db_pod_id: str,
@@ -462,20 +462,16 @@ class StudioService:
         garage_internal_host: str,
         datasets_credentials: dict[str, str],
     ) -> None:
-        mlflow_internal_host = (
-            f"pods-tacc-{tapis_config.tenant}-{username}aistudiomlflow"
-        )
-        gateway_config = pods_schemas.CreateTapisPod(
-            pod_id=f"{username}aistudiogateway",
-            image=tapis_config.gateway_image,
-            description="AI Studio Gateway",
+        platform_config = pods_schemas.CreateTapisPod(
+            pod_id=f"{username}aistudioplatform",
+            image=tapis_config.platform_image,
+            description="AI Studio Platform",
             environment_variables={
                 "AI_STUDIO_DATABASE_URL": (
                     f"postgresql+asyncpg://{db_username}:{db_password.get_secret_value()}"
                     f"@{db_internal_host}:5432/{db_pod_id}"
                 ),
                 "AI_STUDIO_GARAGE_URL": f"http://{garage_internal_host}:3903",
-                "AI_STUDIO_MLFLOW_URL": f"http://{mlflow_internal_host}:5000",
                 "AI_STUDIO_S3_ENDPOINT_URL": f"http://{garage_internal_host}:3900",
                 "AI_STUDIO_DATASETS_DESTINATION": (
                     f"s3://{datasets_credentials['bucket_id']}/"
@@ -497,13 +493,13 @@ class StudioService:
         )
 
         try:
-            await self._tapis.pods.get_pod(gateway_config.pod_id, self._tapis_client)
+            await self._tapis.pods.get_pod(platform_config.pod_id, self._tapis_client)
             await self._tapis.pods.update_pod(
-                pod_id=gateway_config.pod_id,
-                pod_config=gateway_config,
+                pod_id=platform_config.pod_id,
+                pod_config=platform_config,
                 client=self._tapis_client,
             )
         except UpstreamServiceError as error:
             if error.status_code != 404:
                 raise
-            await self._tapis.pods.create_pod(gateway_config, self._tapis_client)
+            await self._tapis.pods.create_pod(platform_config, self._tapis_client)
