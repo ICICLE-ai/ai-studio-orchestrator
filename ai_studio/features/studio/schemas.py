@@ -2,7 +2,9 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from typing import Self
+
+from pydantic import BaseModel, Field, model_validator
 
 from ai_studio.adapters.tapis.pods.validators import PositivePowerOfTwo
 
@@ -32,6 +34,14 @@ class StudioPodResourceOptions(BaseModel):
     mem_request: int = Field(default=256, ge=128, le=32768)
     mem_limit: int = Field(default=3072, ge=128, le=65536)
     gpus: int = Field(default=0, ge=0, le=4)
+
+    @model_validator(mode="after")
+    def requests_must_not_exceed_limits(self) -> Self:
+        if self.cpu_request > self.cpu_limit:
+            raise ValueError("cpu_request must be less than or equal to cpu_limit")
+        if self.mem_request > self.mem_limit:
+            raise ValueError("mem_request must be less than or equal to mem_limit")
+        return self
 
 
 class StudioResourceSetOptions(BaseModel):

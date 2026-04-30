@@ -208,6 +208,13 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValidationError):
             StudioVolumeOptions(size_limit=300)
 
+    def test_resource_options_reject_request_greater_than_limit(self):
+        with self.assertRaises(ValidationError):
+            StudioPodResourceOptions(cpu_request=2000, cpu_limit=1000)
+
+        with self.assertRaises(ValidationError):
+            StudioPodResourceOptions(mem_request=4096, mem_limit=1024)
+
     def test_write_route_file_slugifies_email_username(self):
         service, _, _ = self._make_service()
         resource_id = _resource_id_for_username("user@gmail.com")

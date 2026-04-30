@@ -189,8 +189,8 @@ class StudioService:
             description="Volume for AI Studio MLFlow pip cache.",
             size_limit=provision_config.volumes.mlflow_pip_cache.size_limit,
         )
-        garage_pod = await self._tapis.pods.get_or_create_pod(
-            pod_config=pods_schemas.CreateTapisPod(
+        garage_pod = await self._upsert_pod(
+            pods_schemas.CreateTapisPod(
                 pod_id=f"{resource_id}aistudiogarage",
                 image=tapis_config.garage_image,
                 description="AI Studio Garage S3 Storage",
@@ -227,7 +227,6 @@ class StudioService:
                     ),
                 },
             ),
-            client=self._http_client,
         )
 
         garage_base_url = (
@@ -251,8 +250,8 @@ class StudioService:
             bucket_kind="datasets",
         )
 
-        db_pod = await self._tapis.pods.get_or_create_pod(
-            pod_config=pods_schemas.CreateTapisPod(
+        db_pod = await self._upsert_pod(
+            pods_schemas.CreateTapisPod(
                 pod_id=f"{resource_id}aistudiodb",
                 template=tapis_config.postgres_template,
                 description="AI Studio shared PostgreSQL database",
@@ -265,7 +264,6 @@ class StudioService:
                     ),
                 },
             ),
-            client=self._http_client,
         )
 
         db_creds = await self._tapis.pods.get_pod_credentials(
@@ -737,6 +735,22 @@ class StudioService:
         )
         return data
 
+    async def _upsert_pod(
+        self,
+        pod_config: pods_schemas.CreateTapisPod,
+    ) -> pods_schemas.TapisPodApiResponse:
+        try:
+            await self._tapis.pods.get_pod(pod_config.pod_id, self._http_client)
+            return await self._tapis.pods.update_pod(
+                pod_id=pod_config.pod_id,
+                pod_config=pod_config,
+                client=self._http_client,
+            )
+        except UpstreamServiceError as error:
+            if error.status_code != 404:
+                raise
+            return await self._tapis.pods.create_pod(pod_config, self._http_client)
+
     async def _upsert_mlflow_pod(
         self,
         resource_id: str,
@@ -807,17 +821,7 @@ class StudioService:
             resources=self._to_tapis_resources(resources),
         )
 
-        try:
-            await self._tapis.pods.get_pod(mlflow_config.pod_id, self._http_client)
-            await self._tapis.pods.update_pod(
-                pod_id=mlflow_config.pod_id,
-                pod_config=mlflow_config,
-                client=self._http_client,
-            )
-        except UpstreamServiceError as error:
-            if error.status_code != 404:
-                raise
-            await self._tapis.pods.create_pod(mlflow_config, self._http_client)
+        await self._upsert_pod(mlflow_config)
 
     async def _upsert_datasets_pod(
         self,
@@ -856,17 +860,7 @@ class StudioService:
             resources=self._to_tapis_resources(resources),
         )
 
-        try:
-            await self._tapis.pods.get_pod(datasets_config.pod_id, self._http_client)
-            await self._tapis.pods.update_pod(
-                pod_id=datasets_config.pod_id,
-                pod_config=datasets_config,
-                client=self._http_client,
-            )
-        except UpstreamServiceError as error:
-            if error.status_code != 404:
-                raise
-            await self._tapis.pods.create_pod(datasets_config, self._http_client)
+        await self._upsert_pod(datasets_config)
 
     @staticmethod
     def _to_tapis_resources(
