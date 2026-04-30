@@ -4,6 +4,9 @@ The orchestrator is the shared control-plane service for AI Studio.
 
 It provisions, starts, stops, and deletes per-user studio resources and writes the user-specific Traefik route files that expose those resources through the shared edge gateway.
 
+For cross-service sequence diagrams and lifecycle-lock details, see
+[server workflows](../docs/server-workflows.md).
+
 ## Responsibilities
 
 - validate the caller through Tapis
@@ -97,6 +100,14 @@ Traefik integration:
 - `TAPIS_TRAEFIK_DYNAMIC_DIR`
 
 See [`.env.example`](./.env.example).
+
+## Container Build
+
+```sh
+docker buildx build -t ghcr.io/icicle-ai/ai-studio:latest .
+```
+
+The image runs the FastAPI orchestrator on port `8000` as a non-root user.
 
 ## Notes
 
