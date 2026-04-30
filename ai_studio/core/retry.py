@@ -1,11 +1,14 @@
 """Async retry utility with exponential backoff and jitter."""
 
 import asyncio
+import logging
 import random
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 from ai_studio.exceptions import ServiceUnavailableError
+
+logger = logging.getLogger("ai_studio.core.retry")
 
 T = TypeVar("T")
 
@@ -37,6 +40,7 @@ async def with_retry(
         The last exception raised by *coro_factory* after all attempts
         are exhausted.
     """
+    target = getattr(coro_factory, "__qualname__", repr(coro_factory))
     last_exc: Exception | None = None
     for attempt in range(max_attempts):
         try:
@@ -44,6 +48,21 @@ async def with_retry(
         except retryable as exc:
             last_exc = exc
             if attempt < max_attempts - 1:
-                delay = min(base_delay * (2**attempt) + random.uniform(0, 1), max_delay)
+                delay = random.uniform(0, min(base_delay * (2**attempt), max_delay))
+                logger.warning(
+                    "retry.backoff target=%s attempt=%d/%d error=%s delay_s=%.2f",
+                    target,
+                    attempt + 1,
+                    max_attempts,
+                    type(exc).__name__,
+                    delay,
+                )
                 await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    "retry.exhausted target=%s attempts=%d error=%s",
+                    target,
+                    max_attempts,
+                    type(exc).__name__,
+                )
     raise last_exc  # type: ignore[misc]

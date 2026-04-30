@@ -1,5 +1,6 @@
 """Route registration for studio lifecycle endpoints."""
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Security, status
@@ -10,6 +11,7 @@ from pydantic import SecretStr
 from ai_studio.api.dependencies import (
     get_client,
     get_garage_client,
+    get_lifecycle_locks,
     get_tapis_clients,
 )
 from ai_studio.adapters.tapis.auth import schemas as auth_schemas
@@ -23,11 +25,13 @@ def get_studio_service(
     tapis: Annotated[TapisClients, Depends(get_tapis_clients)],
     garage=Depends(get_garage_client),
     client: AsyncClient = Depends(get_client),
+    lifecycle_locks: dict[str, asyncio.Lock] = Depends(get_lifecycle_locks),
 ) -> StudioService:
     return StudioService(
         tapis=tapis,
         garage=garage,
         tapis_client=client,
+        lifecycle_locks=lifecycle_locks,
     )
 
 

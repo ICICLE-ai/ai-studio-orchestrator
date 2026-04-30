@@ -1,71 +1,49 @@
 """Client for reading and writing user secrets through Tapis Vault APIs."""
 
-import httpx
-from pydantic import BaseModel, SecretStr, ValidationError
+import logging
 
-from ai_studio.exceptions import (
-    InvalidResponseError,
-    ServiceUnavailableError,
-    UpstreamServiceError,
-)
+import httpx
+from pydantic import SecretStr
+
+from ai_studio.adapters.http import make_request
 from ai_studio.adapters.tapis.vaults.schemas import (
     ReadTapisSecretResponse,
     WriteTapisSecret,
     WriteTapisSecretResponse,
 )
 
+logger = logging.getLogger("ai_studio.adapters.tapis.vault")
+
 
 class TapisVaultClient:
     """Handle secret read/write operations through the Tapis Vault API."""
 
-    async def _make_request[T: BaseModel](
+    async def _make_request(
         self,
         client: httpx.AsyncClient,
         method: str,
         url: str,
         token: SecretStr,
-        response_model: type[T],
+        response_model,
         json_data: dict | None = None,
-    ) -> T:
+    ):
         """Send an HTTP request to the Tapis SK API and validate the response."""
-        try:
-            response = await client.request(
-                method=method,
-                url=url,
-                json=json_data,
-                headers={"X-Tapis-Token": token.get_secret_value()},
-            )
-            if response.status_code not in (200, 201):
-                raise UpstreamServiceError(
-                    status_code=response.status_code,
-                    detail={
-                        "message": "Tapis Vault API returned an error",
-                        "details": response.text,
-                    },
-                )
-            return response_model.model_validate(response.json())
-        except httpx.RequestError as error:
-            raise ServiceUnavailableError(
-                status_code=503,
-                detail={
-                    "message": "Unable to reach Tapis Vault service",
-                    "details": f"{type(error).__name__}: {str(error)}",
-                },
-            )
-        except ValidationError as error:
-            errors = error.errors()
-            error_details = [f"{err['loc'][-1]}: {err['msg']}" for err in errors]
-            raise InvalidResponseError(
-                status_code=502,
-                detail={
-                    "message": "Tapis Vault API returned invalid response format",
-                    "details": error_details,
-                },
-            )
+        return await make_request(
+            client=client,
+            method=method,
+            url=url,
+            json_data=json_data,
+            headers={"X-Tapis-Token": token.get_secret_value()},
+            response_model=response_model,
+            upstream_error_message="Tapis Vault API returned an error",
+            invalid_response_message="Tapis Vault API returned invalid response format",
+            unavailable_message="Unable to reach Tapis Vault service",
+        )
 
     async def read_secret(
         self, secret_id: str, token: SecretStr, client: httpx.AsyncClient
     ) -> ReadTapisSecretResponse:
+        logger.debug("vault.read_secret secret_id=%s", secret_id)
         return await self._make_request(
             client=client,
             method="GET",
@@ -81,6 +59,7 @@ class TapisVaultClient:
         token: SecretStr,
         client: httpx.AsyncClient,
     ) -> WriteTapisSecretResponse:
+        logger.info("vault.write_secret secret_id=%s", secret_id)
         return await self._make_request(
             client=client,
             method="POST",

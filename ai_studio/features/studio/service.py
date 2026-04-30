@@ -1,8 +1,14 @@
 """Studio orchestration use cases."""
 
+import asyncio
 from dataclasses import dataclass
+import hashlib
+import logging
+import os
 from pathlib import Path
+import re
 import secrets
+import tempfile
 from typing import Literal
 
 from httpx import AsyncClient
@@ -16,12 +22,30 @@ from ai_studio.adapters.tapis.pods import schemas as pods_schemas
 from ai_studio.adapters.tapis.vaults import TapisVaultClient
 from ai_studio.adapters.tapis.vaults import schemas as vault_schemas
 from ai_studio.core import tapis_config
-from ai_studio.exceptions import UpstreamServiceError
+from ai_studio.exceptions import InvalidResponseError, UpstreamServiceError
 from ai_studio.features.studio.schemas import StudioLifecycleResult
+
+logger = logging.getLogger("ai_studio.features.studio")
 
 GARAGE_ADMIN_SECRET_ID = "aistudio-garage-admin"
 GARAGE_ARTIFACTS_SECRET_ID = "aistudio-garage-artifacts"
 GARAGE_DATASETS_SECRET_ID = "aistudio-garage-datasets"
+_SAFE_RESOURCE_ID_RE = re.compile(r"^[a-z0-9]{1,40}$")
+_UNSAFE_RESOURCE_CHARS_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _resource_id_for_username(username: str) -> str:
+    """Derive a stable DNS/path-safe resource prefix from an authenticated username."""
+    normalized = username.strip().lower()
+    if _SAFE_RESOURCE_ID_RE.fullmatch(normalized):
+        return normalized
+
+    slug = _UNSAFE_RESOURCE_CHARS_RE.sub("", normalized)
+    if not slug:
+        raise ValueError(f"Cannot derive resource id from Tapis username: {username!r}")
+
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:8]
+    return f"{slug[:32]}{digest}"
 
 
 @dataclass(frozen=True)
@@ -41,23 +65,58 @@ class StudioService:
         tapis: TapisClients,
         garage: GarageClient,
         tapis_client: AsyncClient,
+        lifecycle_locks: dict[str, asyncio.Lock] | None = None,
     ):
         self._tapis = tapis
         self._garage = garage
         self._tapis_client = tapis_client
+        self._lifecycle_locks = lifecycle_locks if lifecycle_locks is not None else {}
 
     async def provision_studio(self, token: SecretStr) -> auth_schemas.TapisUserInfo:
         """Provision initial AI Studio resources for the authenticated user."""
 
         user = await self._tapis.auth.validate_token(token, self._tapis_client)
+        resource_id = _resource_id_for_username(user.username)
+        logger.info(
+            "studio.provision.start username=%s resource_id=%s",
+            user.username,
+            resource_id,
+        )
+        async with self._lifecycle_lock(resource_id):
+            try:
+                result = await self._provision_studio_for_user(
+                    token=token,
+                    username=user.username,
+                    resource_id=resource_id,
+                )
+            except Exception:
+                logger.exception(
+                    "studio.provision.failed username=%s resource_id=%s",
+                    user.username,
+                    resource_id,
+                )
+                raise
+            logger.info(
+                "studio.provision.done username=%s resource_id=%s",
+                user.username,
+                resource_id,
+            )
+            return result
+
+    async def _provision_studio_for_user(
+        self,
+        token: SecretStr,
+        username: str,
+        resource_id: str,
+    ) -> auth_schemas.TapisUserInfo:
         rpc_secret, admin_token, metrics_token = await self._ensure_garage_admin_secret(
             token=token,
-            username=user.username,
+            username=username,
         )
 
         garage_vol = await self._tapis.pods.get_or_create_volume(
             volume_config=pods_schemas.CreateTapisPodVolume(
-                volume_id=f"{user.username}aistudiogarage",
+                volume_id=f"{resource_id}aistudiogarage",
                 description=(
                     "Volume for AI Studio Garage S3 storage. Mount points "
                     "/var/lib/garage/meta, /var/lib/garage/data"
@@ -67,16 +126,16 @@ class StudioService:
             client=self._tapis_client,
         )
         db_vol = await self._create_volume(
-            volume_id=f"{user.username}aistudiodb",
+            volume_id=f"{resource_id}aistudiodb",
             description="Volume for AI Studio shared PostgreSQL database.",
         )
         mlflow_pip_cache_vol = await self._create_volume(
-            volume_id=f"{user.username}aistudiomlflowpipcache",
+            volume_id=f"{resource_id}aistudiomlflowpipcache",
             description="Volume for AI Studio MLFlow pip cache.",
         )
         garage_pod = await self._tapis.pods.get_or_create_pod(
             pod_config=pods_schemas.CreateTapisPod(
-                pod_id=f"{user.username}aistudiogarage",
+                pod_id=f"{resource_id}aistudiogarage",
                 image=tapis_config.garage_image,
                 description="AI Studio Garage S3 Storage",
                 volume_mounts={
@@ -102,12 +161,12 @@ class StudioService:
                     "default": pods_schemas.TapisNetworking(
                         port=3900,
                         tapis_auth=True,
-                        tapis_auth_allowed_users=[user.username],
+                        tapis_auth_allowed_users=[username],
                     ),
                     "admin": pods_schemas.TapisNetworking(
                         port=3903,
                         tapis_auth=True,
-                        tapis_auth_allowed_users=[user.username],
+                        tapis_auth_allowed_users=[username],
                     ),
                 },
             ),
@@ -121,7 +180,7 @@ class StudioService:
         artifacts_credentials = await self._ensure_garage_bucket_secret(
             secret_id=GARAGE_ARTIFACTS_SECRET_ID,
             token=token,
-            username=user.username,
+            username=username,
             garage_base_url=garage_base_url,
             admin_token=admin_token,
             bucket_kind="artifacts",
@@ -129,7 +188,7 @@ class StudioService:
         datasets_credentials = await self._ensure_garage_bucket_secret(
             secret_id=GARAGE_DATASETS_SECRET_ID,
             token=token,
-            username=user.username,
+            username=username,
             garage_base_url=garage_base_url,
             admin_token=admin_token,
             bucket_kind="datasets",
@@ -137,7 +196,7 @@ class StudioService:
 
         db_pod = await self._tapis.pods.get_or_create_pod(
             pod_config=pods_schemas.CreateTapisPod(
-                pod_id=f"{user.username}aistudiodb",
+                pod_id=f"{resource_id}aistudiodb",
                 template=tapis_config.postgres_template,
                 description="AI Studio shared PostgreSQL database",
                 volume_mounts={
@@ -161,7 +220,8 @@ class StudioService:
         )
 
         await self._upsert_mlflow_pod(
-            username=user.username,
+            resource_id=resource_id,
+            allowed_username=username,
             db_pod_id=db_pod.result.pod_id,
             db_internal_host=db_internal_host,
             db_username=db_creds.result.user_username,
@@ -171,7 +231,8 @@ class StudioService:
             pip_cache_volume_id=mlflow_pip_cache_vol.result.volume_id,
         )
         await self._upsert_datasets_pod(
-            username=user.username,
+            resource_id=resource_id,
+            allowed_username=username,
             db_pod_id=db_pod.result.pod_id,
             db_internal_host=db_internal_host,
             db_username=db_creds.result.user_username,
@@ -179,18 +240,31 @@ class StudioService:
             garage_internal_host=garage_internal_host,
             datasets_credentials=datasets_credentials,
         )
-        self._write_traefik_route_file(user.username)
+        self._write_traefik_route_file(resource_id)
 
-        return user
+        return auth_schemas.TapisUserInfo(username=username)
 
     async def start_studio(self, token: SecretStr) -> StudioLifecycleResult:
         user = await self._tapis.auth.validate_token(token, self._tapis_client)
-        changed, skipped = await self._run_pod_actions(
-            username=user.username,
-            pod_ids=self._studio_pod_ids(user.username),
-            action="start",
+        resource_id = _resource_id_for_username(user.username)
+        logger.info(
+            "studio.start username=%s resource_id=%s",
+            user.username,
+            resource_id,
         )
-        self._write_traefik_route_file(user.username)
+        async with self._lifecycle_lock(resource_id):
+            changed, skipped = await self._run_pod_actions(
+                username=resource_id,
+                pod_ids=self._studio_pod_ids(resource_id),
+                action="start",
+            )
+            self._write_traefik_route_file(resource_id)
+        logger.info(
+            "studio.start.done username=%s changed=%d skipped=%d",
+            user.username,
+            len(changed),
+            len(skipped),
+        )
         return StudioLifecycleResult(
             username=user.username,
             changed=changed,
@@ -199,10 +273,23 @@ class StudioService:
 
     async def stop_studio(self, token: SecretStr) -> StudioLifecycleResult:
         user = await self._tapis.auth.validate_token(token, self._tapis_client)
-        changed, skipped = await self._run_pod_actions(
-            username=user.username,
-            pod_ids=list(reversed(self._studio_pod_ids(user.username))),
-            action="stop",
+        resource_id = _resource_id_for_username(user.username)
+        logger.info(
+            "studio.stop username=%s resource_id=%s",
+            user.username,
+            resource_id,
+        )
+        async with self._lifecycle_lock(resource_id):
+            changed, skipped = await self._run_pod_actions(
+                username=resource_id,
+                pod_ids=list(reversed(self._studio_pod_ids(resource_id))),
+                action="stop",
+            )
+        logger.info(
+            "studio.stop.done username=%s changed=%d skipped=%d",
+            user.username,
+            len(changed),
+            len(skipped),
         )
         return StudioLifecycleResult(
             username=user.username,
@@ -212,13 +299,26 @@ class StudioService:
 
     async def delete_studio(self, token: SecretStr) -> StudioLifecycleResult:
         user = await self._tapis.auth.validate_token(token, self._tapis_client)
-        changed, skipped = await self._run_pod_actions(
-            username=user.username,
-            pod_ids=list(reversed(self._studio_pod_ids(user.username))),
-            action="delete",
+        resource_id = _resource_id_for_username(user.username)
+        logger.info(
+            "studio.delete username=%s resource_id=%s",
+            user.username,
+            resource_id,
         )
-        deleted_volumes, skipped_volumes = await self._delete_volumes(user.username)
-        self._remove_traefik_route_file(user.username)
+        async with self._lifecycle_lock(resource_id):
+            changed, skipped = await self._run_pod_actions(
+                username=resource_id,
+                pod_ids=list(reversed(self._studio_pod_ids(resource_id))),
+                action="delete",
+            )
+            deleted_volumes, skipped_volumes = await self._delete_volumes(resource_id)
+            self._remove_traefik_route_file(resource_id)
+        logger.info(
+            "studio.delete.done username=%s pods_changed=%d volumes_changed=%d",
+            user.username,
+            len(changed),
+            len(deleted_volumes),
+        )
         return StudioLifecycleResult(
             username=user.username,
             changed=[*changed, *deleted_volumes],
@@ -234,6 +334,34 @@ class StudioService:
             ),
             client=self._tapis_client,
         )
+
+    def _lifecycle_lock(self, resource_id: str) -> asyncio.Lock:
+        lock = self._lifecycle_locks.get(resource_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._lifecycle_locks[resource_id] = lock
+        return lock
+
+    @staticmethod
+    def _require_secret_keys(
+        secret_id: str,
+        secret_map: dict[str, str],
+        required_keys: tuple[str, ...],
+    ) -> dict[str, str]:
+        missing = [key for key in required_keys if not secret_map.get(key)]
+        if missing:
+            raise InvalidResponseError(
+                status_code=502,
+                detail={
+                    "message": "Vault secret is missing required keys",
+                    "details": (
+                        f"Secret '{secret_id}' is missing required key(s): "
+                        f"{', '.join(missing)}. The stored secret may be incomplete; "
+                        "delete or repair it before retrying provisioning."
+                    ),
+                },
+            )
+        return secret_map
 
     async def _run_pod_actions(
         self,
@@ -256,6 +384,11 @@ class StudioService:
                 changed.append(pod_id)
             except UpstreamServiceError as error:
                 if error.status_code == 404:
+                    logger.info(
+                        "studio.pod_action.skipped action=%s pod_id=%s reason=not_found",
+                        action,
+                        pod_id,
+                    )
                     skipped.append(pod_id)
                     continue
                 raise
@@ -294,19 +427,39 @@ class StudioService:
 
     @staticmethod
     def _traefik_route_file_path(username: str) -> Path:
-        return tapis_config.traefik_dynamic_dir / f"{username}.yml"
+        return tapis_config.traefik_dynamic_dir / f"{_resource_id_for_username(username)}.yml"
 
     def _write_traefik_route_file(self, username: str) -> None:
+        username = _resource_id_for_username(username)
         route_file = self._traefik_route_file_path(username)
+        logger.info("studio.traefik.write path=%s", route_file)
         route_file.parent.mkdir(parents=True, exist_ok=True)
-        route_file.write_text(self._render_traefik_route_file(username))
+        content = self._render_traefik_route_file(username)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=route_file.parent,
+            prefix=f".{route_file.name}.",
+            suffix=".tmp",
+            text=True,
+        )
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(content)
+            os.replace(tmp_path, route_file)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
+            raise
 
     def _remove_traefik_route_file(self, username: str) -> None:
         route_file = self._traefik_route_file_path(username)
+        logger.info("studio.traefik.remove path=%s", route_file)
         route_file.unlink(missing_ok=True)
 
     @staticmethod
     def _render_traefik_route_file(username: str) -> str:
+        username = _resource_id_for_username(username)
         datasets_internal_host = (
             f"pods-tacc-{tapis_config.tenant}-{username}aistudiodatasets"
         )
@@ -320,20 +473,29 @@ class StudioService:
             f"    {username}-datasets:\n"
             f"      rule: Host(`{tapis_config.traefik_public_host}`) && "
             f"PathPrefix(`/u/{username}/datasets`)\n"
+            "      priority: 100\n"
             "      entryPoints:\n"
             "        - web\n"
             "      middlewares:\n"
+            "        - security-headers\n"
+            "        - datasets-buffer\n"
             f"        - strip-{username}-datasets-prefix\n"
             f"      service: {username}-datasets\n\n"
             f"    {username}-mlflow:\n"
             f"      rule: Host(`{tapis_config.traefik_public_host}`) && "
             f"PathPrefix(`/u/{username}/mlflow`)\n"
+            "      priority: 100\n"
             "      entryPoints:\n"
             "        - web\n"
             "      middlewares:\n"
+            "        - security-headers\n"
             f"        - strip-{username}-mlflow-prefix\n"
             f"      service: {username}-mlflow\n\n"
             "  middlewares:\n"
+            "    datasets-buffer:\n"
+            "      buffering:\n"
+            "        maxRequestBodyBytes: 10737418240\n"
+            "        memRequestBodyBytes: 2097152\n\n"
             f"    strip-{username}-datasets-prefix:\n"
             "      stripPrefix:\n"
             "        prefixes:\n"
@@ -345,6 +507,10 @@ class StudioService:
             "  services:\n"
             f"    {username}-datasets:\n"
             "      loadBalancer:\n"
+            "        healthCheck:\n"
+            "          path: /health\n"
+            "          interval: 10s\n"
+            "          timeout: 3s\n"
             "        servers:\n"
             f"          - url: http://{datasets_internal_host}:8000\n\n"
             f"    {username}-mlflow:\n"
@@ -362,10 +528,15 @@ class StudioService:
                 token=token,
                 client=self._tapis_client,
             )
+            secret_map = self._require_secret_keys(
+                GARAGE_ADMIN_SECRET_ID,
+                vault_admin.result.secretMap,
+                ("rpc_secret", "admin_token", "metrics_token"),
+            )
             return (
-                SecretStr(vault_admin.result.secretMap["rpc_secret"]),
-                SecretStr(vault_admin.result.secretMap["admin_token"]),
-                SecretStr(vault_admin.result.secretMap["metrics_token"]),
+                SecretStr(secret_map["rpc_secret"]),
+                SecretStr(secret_map["admin_token"]),
+                SecretStr(secret_map["metrics_token"]),
             )
         except UpstreamServiceError as error:
             if error.status_code != 404:
@@ -405,7 +576,11 @@ class StudioService:
                 token=token,
                 client=self._tapis_client,
             )
-            return vault_secret.result.secretMap
+            return self._require_secret_keys(
+                secret_id,
+                vault_secret.result.secretMap,
+                ("access_key_id", "secret_access_key", "bucket_id"),
+            )
         except UpstreamServiceError as error:
             if error.status_code != 404:
                 raise
@@ -443,7 +618,8 @@ class StudioService:
 
     async def _upsert_mlflow_pod(
         self,
-        username: str,
+        resource_id: str,
+        allowed_username: str,
         db_pod_id: str,
         db_internal_host: str,
         db_username: str,
@@ -453,7 +629,7 @@ class StudioService:
         pip_cache_volume_id: str,
     ) -> None:
         mlflow_config = pods_schemas.CreateTapisPod(
-            pod_id=f"{username}aistudiomlflow",
+            pod_id=f"{resource_id}aistudiomlflow",
             image=tapis_config.mlflow_image,
             description="AI Studio MLFlow",
             command=[
@@ -500,7 +676,7 @@ class StudioService:
                     protocol=pods_schemas.TapisNetworkingProtocol.http,
                     port=5000,
                     tapis_auth=True,
-                    tapis_auth_allowed_users=[username],
+                    tapis_auth_allowed_users=[allowed_username],
                 ),
             },
         )
@@ -519,7 +695,8 @@ class StudioService:
 
     async def _upsert_datasets_pod(
         self,
-        username: str,
+        resource_id: str,
+        allowed_username: str,
         db_pod_id: str,
         db_internal_host: str,
         db_username: str,
@@ -528,7 +705,7 @@ class StudioService:
         datasets_credentials: dict[str, str],
     ) -> None:
         datasets_config = pods_schemas.CreateTapisPod(
-            pod_id=f"{username}aistudiodatasets",
+            pod_id=f"{resource_id}aistudiodatasets",
             image=tapis_config.datasets_image,
             description="AI Studio Datasets",
             environment_variables={
@@ -552,7 +729,7 @@ class StudioService:
                     protocol=pods_schemas.TapisNetworkingProtocol.http,
                     port=8000,
                     tapis_auth=True,
-                    tapis_auth_allowed_users=[username],
+                    tapis_auth_allowed_users=[allowed_username],
                 ),
             },
         )

@@ -1,28 +1,35 @@
 """Authentication helpers for validating Tapis user tokens."""
 
-import httpx
-from pydantic import SecretStr, ValidationError
+import logging
 
-from ai_studio.core import tapis_config
+import httpx
+from pydantic import SecretStr
+
+from ai_studio.adapters.http import make_request
 from ai_studio.exceptions import (
     AuthenticationError,
-    InvalidResponseError,
-    ServiceUnavailableError,
 )
 from ai_studio.adapters.tapis.auth.schemas import (
     TapisJWTValidationResponse,
     TapisUserInfo,
 )
 
+logger = logging.getLogger("ai_studio.adapters.tapis.auth")
+
 
 class TapisAuthClient:
     """Utilities for validating bearer tokens against Tapis OAuth APIs."""
 
-    async def validate_token(self, token: SecretStr) -> TapisUserInfo:
+    async def validate_token(
+        self,
+        token: SecretStr,
+        client: httpx.AsyncClient,
+    ) -> TapisUserInfo:
         """Validate a Tapis token and return the corresponding user payload.
 
         Args:
             token: Tapis token provided in the ``X-Tapis-Token`` header.
+            client: Shared async HTTP client used to reach the auth service.
 
         Returns:
             Authenticated user information returned by ``/v3/oauth2/userinfo``.
@@ -32,36 +39,19 @@ class TapisAuthClient:
             ServiceUnavailableError: If the auth service cannot be reached.
             InvalidResponseError: If the auth service returns an unparseable response.
         """
-        async with httpx.AsyncClient(
-            base_url=tapis_config.base_url,
-            headers={"X-Tapis-Token": token.get_secret_value()},
-        ) as client:
-            try:
-                response: httpx.Response = await client.get(url="/v3/oauth2/userinfo")
-                if response.status_code != 200:
-                    raise AuthenticationError(
-                        status_code=response.status_code,
-                        detail={
-                            "message": "Authentication service returned an error",
-                            "details": response.text,
-                        },
-                    )
-                return TapisJWTValidationResponse.model_validate(response.json()).result
-            except httpx.RequestError as error:
-                raise ServiceUnavailableError(
-                    status_code=503,
-                    detail={
-                        "message": "Unable to reach authentication service",
-                        "details": f"{type(error).__name__}: {str(error)}",
-                    },
-                )
-            except ValidationError as error:
-                errors = error.errors()
-                error_details = [f"{err['loc'][-1]}: {err['msg']}" for err in errors]
-                raise InvalidResponseError(
-                    status_code=502,
-                    detail={
-                        "message": "Invalid response from authentication service",
-                        "details": error_details,
-                    },
-                )
+        logger.debug("auth.validate_token")
+        result = (
+            await make_request(
+                client=client,
+                method="GET",
+                url="/v3/oauth2/userinfo",
+                headers={"X-Tapis-Token": token.get_secret_value()},
+                response_model=TapisJWTValidationResponse,
+                upstream_error_message="Authentication service returned an error",
+                invalid_response_message="Invalid response from authentication service",
+                unavailable_message="Unable to reach authentication service",
+                upstream_error_class=AuthenticationError,
+            )
+        ).result
+        logger.info("auth.validate_token.success username=%s", result.username)
+        return result

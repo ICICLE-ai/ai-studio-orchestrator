@@ -1,12 +1,15 @@
 """Garage object storage configuration and API client utilities."""
 
+import logging
+
 import httpx
 import tomlkit
-from pydantic import BaseModel, SecretStr, TypeAdapter, ValidationError
+from pydantic import SecretStr
 
+from ai_studio.adapters.http import make_empty_request, make_list_request, make_request
 from ai_studio.core.retry import with_retry
 from ai_studio.exceptions import (
-    InvalidResponseError,
+    GarageKeyConflictError,
     ServiceUnavailableError,
     UpstreamServiceError,
 )
@@ -31,60 +34,44 @@ from ai_studio.adapters.garage.schemas import (
     UpdateGarageClusterLayoutRolePayload,
 )
 
+logger = logging.getLogger("ai_studio.adapters.garage")
+
 
 class GarageClient:
     """Build Garage config files and call Garage admin API endpoints."""
 
-    async def _make_request[T: BaseModel](
+    @staticmethod
+    def _headers(
+        garage_admin_token: SecretStr,
+        tapis_token: SecretStr,
+    ) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {garage_admin_token.get_secret_value()}",
+            "X-Tapis-Token": tapis_token.get_secret_value(),
+        }
+
+    async def _make_request(
         self,
         client: httpx.AsyncClient,
         method: str,
         url: str,
-        response_model: type[T],
+        response_model,
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
         json_data: dict | None = None,
-    ) -> T:
+    ):
         """Send an HTTP request to Garage and validate the response payload."""
-        try:
-            response = await client.request(
-                method=method,
-                url=url,
-                json=json_data,
-                headers={
-                    "Authorization": (
-                        f"Bearer {garage_admin_token.get_secret_value()}"
-                    ),
-                    "X-Tapis-Token": tapis_token.get_secret_value(),
-                },
-            )
-            if response.status_code not in (200, 201):
-                raise UpstreamServiceError(
-                    status_code=response.status_code,
-                    detail={
-                        "message": "Garage API returned an error",
-                        "details": response.text,
-                    },
-                )
-            return response_model.model_validate(response.json())
-        except httpx.RequestError as error:
-            raise ServiceUnavailableError(
-                status_code=503,
-                detail={
-                    "message": "Unable to reach Garage service",
-                    "details": f"{type(error).__name__}: {str(error)}",
-                },
-            )
-        except ValidationError as error:
-            errors = error.errors()
-            error_details = [f"{err['loc'][-1]}: {err['msg']}" for err in errors]
-            raise InvalidResponseError(
-                status_code=502,
-                detail={
-                    "message": "Garage API returned invalid response format",
-                    "details": error_details,
-                },
-            )
+        return await make_request(
+            client=client,
+            method=method,
+            url=url,
+            json_data=json_data,
+            headers=self._headers(garage_admin_token, tapis_token),
+            response_model=response_model,
+            upstream_error_message="Garage API returned an error",
+            invalid_response_message="Garage API returned invalid response format",
+            unavailable_message="Unable to reach Garage service",
+        )
 
     def generate_garage_config(
         self,
@@ -265,45 +252,16 @@ class GarageClient:
         tapis_token: SecretStr,
     ) -> list:
         """Send a GET request to a Garage list endpoint that returns a JSON array."""
-        try:
-            response = await client.request(
-                method="GET",
-                url=url,
-                headers={
-                    "Authorization": (
-                        f"Bearer {garage_admin_token.get_secret_value()}"
-                    ),
-                    "X-Tapis-Token": tapis_token.get_secret_value(),
-                },
-            )
-            if response.status_code not in (200, 201):
-                raise UpstreamServiceError(
-                    status_code=response.status_code,
-                    detail={
-                        "message": "Garage API returned an error",
-                        "details": response.text,
-                    },
-                )
-            adapter = TypeAdapter(list[item_type])
-            return adapter.validate_python(response.json())
-        except httpx.RequestError as error:
-            raise ServiceUnavailableError(
-                status_code=503,
-                detail={
-                    "message": "Unable to reach Garage service",
-                    "details": f"{type(error).__name__}: {str(error)}",
-                },
-            )
-        except ValidationError as error:
-            errors = error.errors()
-            error_details = [f"{err['loc'][-1]}: {err['msg']}" for err in errors]
-            raise InvalidResponseError(
-                status_code=502,
-                detail={
-                    "message": "Garage API returned invalid response format",
-                    "details": error_details,
-                },
-            )
+        return await make_list_request(
+            client=client,
+            method="GET",
+            url=url,
+            headers=self._headers(garage_admin_token, tapis_token),
+            item_type=item_type,
+            upstream_error_message="Garage API returned an error",
+            invalid_response_message="Garage API returned invalid response format",
+            unavailable_message="Unable to reach Garage service",
+        )
 
     async def list_keys(
         self,
@@ -341,33 +299,14 @@ class GarageClient:
         tapis_token: SecretStr,
     ) -> None:
         """Delete a Garage access key."""
-        try:
-            response = await client.request(
-                method="POST",
-                url=f"/v2/DeleteKey?id={payload.accessKeyId}",
-                headers={
-                    "Authorization": (
-                        f"Bearer {garage_admin_token.get_secret_value()}"
-                    ),
-                    "X-Tapis-Token": tapis_token.get_secret_value(),
-                },
-            )
-            if response.status_code not in (200, 204):
-                raise UpstreamServiceError(
-                    status_code=response.status_code,
-                    detail={
-                        "message": "Garage API returned an error",
-                        "details": response.text,
-                    },
-                )
-        except httpx.RequestError as error:
-            raise ServiceUnavailableError(
-                status_code=503,
-                detail={
-                    "message": "Unable to reach Garage service",
-                    "details": f"{type(error).__name__}: {str(error)}",
-                },
-            )
+        await make_empty_request(
+            client=client,
+            method="POST",
+            url=f"/v2/DeleteKey?id={payload.accessKeyId}",
+            headers=self._headers(garage_admin_token, tapis_token),
+            upstream_error_message="Garage API returned an error",
+            unavailable_message="Unable to reach Garage service",
+        )
 
     async def _ensure_layout(
         self,
@@ -399,6 +338,12 @@ class GarageClient:
         layout_applied = len(layout.roles) > 0 and len(layout.stagedRoleChanges) == 0
 
         if not layout_applied:
+            logger.info(
+                "garage.layout.apply node_id=%s zone=%s capacity=%d",
+                node_id,
+                layout_zone,
+                layout_capacity,
+            )
             await self.update_cluster_layout(
                 payload=UpdateGarageClusterLayoutPayload(
                     roles=[
@@ -444,18 +389,27 @@ class GarageClient:
             layout_capacity=layout_capacity,
         )
 
-        # Get-or-create access key (delete+recreate to recover secret key)
+        # Do not rotate an existing key here. If Vault lost the secret half,
+        # an operator must reconcile the inconsistent state manually.
         existing_keys = await self.list_keys(**common)
         matching_key = next((k for k in existing_keys if k.name == key_name), None)
         if matching_key is not None:
-            await self.delete_key(
-                payload=DeleteGarageKeyPayload(accessKeyId=matching_key.accessKeyId),
-                **common,
+            raise GarageKeyConflictError(
+                status_code=500,
+                detail={
+                    "message": "Garage key exists but vault has no recoverable secret",
+                    "details": (
+                        f"Garage key '{key_name}' already exists. Manual cleanup is "
+                        "required before provisioning can continue."
+                    ),
+                },
             )
         key = await self.create_key(
             payload=CreateGarageKeyPayload(name=key_name),
             **common,
         )
+
+        logger.info("garage.create_key key_name=%s", key_name)
 
         # Get-or-create bucket
         existing_buckets = await self.list_buckets(**common)
@@ -464,12 +418,22 @@ class GarageClient:
         )
         if matching_bucket is not None:
             bucket_id = matching_bucket.id
+            logger.info(
+                "garage.bucket.exists alias=%s bucket_id=%s",
+                bucket_alias,
+                bucket_id,
+            )
         else:
             bucket = await self.create_bucket(
                 payload=CreateGarageBucketPayload(globalAlias=bucket_alias),
                 **common,
             )
             bucket_id = bucket.id
+            logger.info(
+                "garage.bucket.created alias=%s bucket_id=%s",
+                bucket_alias,
+                bucket_id,
+            )
 
         # Grant key permissions on bucket (idempotent)
         await self.allow_bucket_key(

@@ -1,5 +1,7 @@
 """FastAPI dependency providers used by AI Studio API routes."""
 
+import asyncio
+
 import httpx
 from fastapi import Request
 
@@ -20,6 +22,11 @@ def get_client(request: Request) -> httpx.AsyncClient:
         Shared async HTTP client configured during app startup.
     """
     return request.app.state.client
+
+
+def get_lifecycle_locks(request: Request) -> dict[str, asyncio.Lock]:
+    """Return shared per-resource lifecycle locks stored on app state."""
+    return request.app.state.lifecycle_locks
 
 
 def get_tapis_clients() -> TapisClients:
