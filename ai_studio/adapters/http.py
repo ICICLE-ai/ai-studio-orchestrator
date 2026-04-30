@@ -17,6 +17,7 @@ logger = logging.getLogger("ai_studio.adapters.http")
 
 
 def _validation_details(error: ValidationError) -> list[str]:
+    """Return compact validation messages suitable for API error details."""
     return [f"{err['loc'][-1]}: {err['msg']}" for err in error.errors()]
 
 

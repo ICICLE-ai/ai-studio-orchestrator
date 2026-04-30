@@ -3,11 +3,12 @@
 import asyncio
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import AsyncMock
 
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 os.environ.setdefault("TAPIS_ADMIN_TOKEN", "admin-token")
 os.environ.setdefault("TAPIS_BASE_URL", "https://tapis.test")
@@ -16,6 +17,16 @@ os.environ.setdefault("TAPIS_TENANT", "testtenant")
 from ai_studio.adapters.tapis.auth import schemas as auth_schemas
 from ai_studio.core import tapis_config
 from ai_studio.exceptions import InvalidResponseError, UpstreamServiceError
+from ai_studio.features.studio.schemas import (
+    StudioLifecycleOptions,
+    StudioPodResourceOptions,
+    StudioProvisionRequest,
+    StudioResourceSetOptions,
+    StudioVolumeOptions,
+    StudioVolumeSetOptions,
+    get_studio_provision_options,
+    resolve_studio_provision_config,
+)
 from ai_studio.features.studio.service import (
     StudioService,
     TapisClients,
@@ -31,7 +42,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
             vault=AsyncMock(),
         )
         garage = AsyncMock()
-        service = StudioService(tapis=tapis, garage=garage, tapis_client=AsyncMock())
+        service = StudioService(tapis=tapis, garage=garage, http_client=AsyncMock())
         return service, tapis, garage
 
     async def test_start_studio_starts_pods_in_dependency_order(self):
@@ -133,7 +144,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("PathPrefix(`/u/alice/mlflow`)", rendered)
         self.assertIn("datasets-buffer", rendered)
         self.assertIn(
-            "http://pods-tacc-testtenant-aliceaistudiodatasets:8000", rendered
+            "http://pods-tacc-testtenant-aliceaistudiodatasets:5000", rendered
         )
         self.assertIn(
             "http://pods-tacc-testtenant-aliceaistudiomlflow:5000", rendered
@@ -147,6 +158,55 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("@", email_resource_id)
         self.assertNotIn("-", email_resource_id)
         self.assertEqual(email_resource_id, _resource_id_for_username("User@Gmail.com"))
+
+    def test_resolve_provision_config_uses_standard_defaults(self):
+        config = resolve_studio_provision_config()
+
+        self.assertEqual(config.profile, "standard")
+        self.assertEqual(config.volumes.garage.size_limit, 1024)
+        self.assertEqual(config.volumes.postgres.size_limit, 1024)
+        self.assertEqual(config.resources.mlflow.cpu_limit, 2000)
+        self.assertEqual(config.lifecycle.time_to_stop_default, 43200)
+
+    def test_resolve_provision_config_merges_custom_request(self):
+        config = resolve_studio_provision_config(
+            StudioProvisionRequest(
+                profile="custom",
+                volumes=StudioVolumeSetOptions(
+                    garage=StudioVolumeOptions(size_limit=2048),
+                ),
+                resources=StudioResourceSetOptions(
+                    mlflow=StudioPodResourceOptions(
+                        cpu_request=500,
+                        cpu_limit=4000,
+                        mem_request=1024,
+                        mem_limit=8192,
+                    ),
+                ),
+                lifecycle=StudioLifecycleOptions(time_to_stop_default=86400),
+            )
+        )
+
+        self.assertEqual(config.profile, "custom")
+        self.assertEqual(config.volumes.garage.size_limit, 2048)
+        self.assertEqual(config.volumes.postgres.size_limit, 1024)
+        self.assertEqual(config.resources.mlflow.cpu_limit, 4000)
+        self.assertEqual(config.resources.datasets.cpu_limit, 2000)
+        self.assertEqual(config.lifecycle.time_to_stop_default, 86400)
+
+    def test_get_studio_provision_options_exposes_profiles_and_constraints(self):
+        options = get_studio_provision_options()
+
+        self.assertEqual(
+            [profile.id for profile in options.profiles],
+            ["small", "standard", "large"],
+        )
+        self.assertIn(1024, options.constraints.volume_size_limit_values)
+        self.assertEqual(options.constraints.memory_unit, "MiB")
+
+    def test_volume_options_rejects_non_power_of_two_size(self):
+        with self.assertRaises(ValidationError):
+            StudioVolumeOptions(size_limit=300)
 
     def test_write_route_file_slugifies_email_username(self):
         service, _, _ = self._make_service()
@@ -208,7 +268,7 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    async def test_upsert_datasets_pod_keeps_real_username_for_tapis_auth(self):
+    async def test_upsert_datasets_pod_uses_default_tapis_networking(self):
         service, tapis, _ = self._make_service()
         resource_id = _resource_id_for_username("user@gmail.com")
         tapis.pods.get_pod = AsyncMock(
@@ -218,7 +278,6 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
 
         await service._upsert_datasets_pod(
             resource_id=resource_id,
-            allowed_username="user@gmail.com",
             db_pod_id=f"{resource_id}aistudiodb",
             db_internal_host=f"pods-tacc-testtenant-{resource_id}aistudiodb",
             db_username="db-user",
@@ -229,14 +288,68 @@ class StudioServiceLifecycleTest(unittest.IsolatedAsyncioTestCase):
                 "secret_access_key": "secret-key",
                 "bucket_id": "datasets",
             },
+            resources=StudioPodResourceOptions(),
+            time_to_stop_default=43200,
         )
 
         pod_config = tapis.pods.create_pod.call_args.args[0]
         self.assertEqual(pod_config.pod_id, f"{resource_id}aistudiodatasets")
-        self.assertEqual(
-            pod_config.networking["default"].tapis_auth_allowed_users,
-            ["user@gmail.com"],
+        self.assertEqual(pod_config.networking["default"].port, 5000)
+        self.assertFalse(pod_config.networking["default"].tapis_auth)
+
+    async def test_upsert_datasets_pod_applies_requested_resources_and_lifecycle(self):
+        service, tapis, _ = self._make_service()
+        tapis.pods.get_pod = AsyncMock(
+            side_effect=UpstreamServiceError(status_code=404, detail={"message": "nope"})
         )
+        tapis.pods.create_pod = AsyncMock()
+
+        await service._upsert_datasets_pod(
+            resource_id="alice",
+            db_pod_id="aliceaistudiodb",
+            db_internal_host="pods-tacc-testtenant-aliceaistudiodb",
+            db_username="db-user",
+            db_password=SecretStr("db-pass"),
+            garage_internal_host="pods-tacc-testtenant-aliceaistudiogarage",
+            datasets_credentials={
+                "access_key_id": "access-key",
+                "secret_access_key": "secret-key",
+                "bucket_id": "datasets",
+            },
+            resources=StudioPodResourceOptions(
+                cpu_request=500,
+                cpu_limit=4000,
+                mem_request=1024,
+                mem_limit=8192,
+                gpus=1,
+            ),
+            time_to_stop_default=86400,
+        )
+
+        pod_config = tapis.pods.create_pod.call_args.args[0]
+        self.assertEqual(pod_config.time_to_stop_default, 86400)
+        self.assertEqual(pod_config.resources.cpu_request, 500)
+        self.assertEqual(pod_config.resources.cpu_limit, 4000)
+        self.assertEqual(pod_config.resources.mem_request, 1024)
+        self.assertEqual(pod_config.resources.mem_limit, 8192)
+        self.assertEqual(pod_config.resources.gpus, 1)
+
+    async def test_create_volume_raises_conflict_for_existing_size_mismatch(self):
+        service, tapis, _ = self._make_service()
+        volume = SimpleNamespace(
+            result=SimpleNamespace(volume_id="aliceaistudiodb", size_limit=1024)
+        )
+        tapis.pods.get_or_create_volume.return_value = volume
+
+        with self.assertRaises(UpstreamServiceError) as ctx:
+            await service._create_volume(
+                volume_id="aliceaistudiodb",
+                description="Database volume",
+                size_limit=2048,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertIn("already exists", ctx.exception.detail["details"])
 
     async def test_malformed_garage_admin_secret_has_clear_error(self):
         service, tapis, _ = self._make_service()

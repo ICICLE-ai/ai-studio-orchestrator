@@ -35,6 +35,7 @@ _STANDARD_LOGRECORD_ATTRS = frozenset(
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable using common truthy strings."""
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -42,6 +43,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def _resolve_format() -> str:
+    """Resolve the active log format from environment or stderr interactivity."""
     explicit = os.environ.get("LOG_FORMAT", "").strip().lower()
     if explicit in ("json", "console"):
         return explicit
@@ -61,6 +63,7 @@ class PassThroughQueueHandler(logging.handlers.QueueHandler):
     """
 
     def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
+        """Copy the record without formatting or stripping exception state."""
         return copy.copy(record)
 
 
@@ -74,6 +77,7 @@ class RequestIDFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Add a sanitized request_id attribute and keep the record."""
         raw = REQUEST_ID_VAR.get()
         record.request_id = raw if _VALID_REQUEST_ID.fullmatch(raw) else "-"
         return True
@@ -91,6 +95,7 @@ class JsonFormatter(logging.Formatter):
     converter = time.gmtime
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as one JSON object per line."""
         payload: dict[str, Any] = {
             "timestamp": (
                 self.formatTime(record, "%Y-%m-%dT%H:%M:%S")
@@ -125,7 +130,10 @@ def _build_rich_console_formatter():
     console = Console(stderr=True)
 
     class _RichTracebackFormatter(DefaultFormatter):
+        """Console formatter that renders exception tracebacks with rich."""
+
         def formatException(self, ei) -> str:
+            """Render exception information as rich console text."""
             exc_type, exc_value, tb = ei
             tb_obj = Traceback.from_exception(
                 exc_type,

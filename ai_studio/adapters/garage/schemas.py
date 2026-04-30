@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, SecretStr
 
 
 class UpdateGarageClusterLayoutRolePayload(BaseModel):
+    """Garage layout role settings for a single storage node."""
+
     id: str
     zone: str
     capacity: int
@@ -11,10 +13,14 @@ class UpdateGarageClusterLayoutRolePayload(BaseModel):
 
 
 class UpdateGarageClusterLayoutPayload(BaseModel):
+    """Payload for staging Garage cluster layout roles."""
+
     roles: list[UpdateGarageClusterLayoutRolePayload] = Field(default_factory=list)
 
 
 class GetGarageHealthResponse(BaseModel):
+    """Garage health summary returned by the admin API."""
+
     status: str
     knownNodes: int
     connectedNodes: int
@@ -26,17 +32,23 @@ class GetGarageHealthResponse(BaseModel):
 
 
 class GarageClusterStatusNodeRole(BaseModel):
+    """Role information for a Garage cluster node."""
+
     zone: str
     tags: list[str] = Field(default_factory=list)
     capacity: int
 
 
 class GarageClusterStatusNodePartition(BaseModel):
+    """Partition availability counts for a Garage node."""
+
     available: int
     total: int
 
 
 class GarageClusterStatusNode(BaseModel):
+    """Garage cluster node status returned by the admin API."""
+
     id: str
     garageVersion: str
     addr: str
@@ -50,11 +62,15 @@ class GarageClusterStatusNode(BaseModel):
 
 
 class GetGarageClusterStatusResponse(BaseModel):
+    """Garage cluster status response with all known nodes."""
+
     layoutVersion: int
     nodes: list[GarageClusterStatusNode] = Field(default_factory=list)
 
 
 class GarageClusterLayoutRole(BaseModel):
+    """Applied Garage layout role for a storage node."""
+
     id: str
     zone: str
     tags: list[str] = Field(default_factory=list)
@@ -64,10 +80,14 @@ class GarageClusterLayoutRole(BaseModel):
 
 
 class GarageClusterLayoutParameters(BaseModel):
+    """Garage cluster layout parameters."""
+
     zoneRedundancy: str
 
 
 class UpdateGarageClusterLayoutResponse(BaseModel):
+    """Garage layout response after staging or reading layout changes."""
+
     version: int
     roles: list[GarageClusterLayoutRole] = Field(default_factory=list)
     parameters: GarageClusterLayoutParameters
@@ -77,23 +97,33 @@ class UpdateGarageClusterLayoutResponse(BaseModel):
 
 
 class ApplyGarageClusterLayoutPayload(BaseModel):
+    """Payload for applying the currently staged Garage layout version."""
+
     version: int
 
 
 class ApplyGarageClusterLayoutResponse(BaseModel):
+    """Response returned after applying a staged Garage layout."""
+
     message: list[str] = Field(default_factory=list)
     layout: UpdateGarageClusterLayoutResponse
 
 
 class CreateGarageKeyPayload(BaseModel):
+    """Payload for creating a Garage access key."""
+
     name: str
 
 
 class GarageKeyPermissions(BaseModel):
+    """Cluster-level permissions granted to a Garage access key."""
+
     createBucket: bool = False
 
 
 class CreateGarageKeyResponse(BaseModel):
+    """Garage access key response including the one-time secret key."""
+
     accessKeyId: str
     created: str
     name: str
@@ -105,21 +135,29 @@ class CreateGarageKeyResponse(BaseModel):
 
 
 class CreateGarageBucketPayload(BaseModel):
+    """Payload for creating a Garage bucket with a global alias."""
+
     globalAlias: str
 
 
 class GarageBucketQuotas(BaseModel):
+    """Optional quota limits configured on a Garage bucket."""
+
     maxSize: int | None = None
     maxObjects: int | None = None
 
 
 class GarageBucketKeyPermissions(BaseModel):
+    """Per-bucket permissions granted to a Garage access key."""
+
     read: bool
     write: bool
     owner: bool
 
 
 class GarageBucketKeyBinding(BaseModel):
+    """Garage bucket binding for an access key and its permissions."""
+
     accessKeyId: str
     name: str
     permissions: GarageBucketKeyPermissions
@@ -127,6 +165,8 @@ class GarageBucketKeyBinding(BaseModel):
 
 
 class CreateGarageBucketResponse(BaseModel):
+    """Garage bucket response including aliases, key bindings, and usage."""
+
     id: str
     created: str
     globalAliases: list[str] = Field(default_factory=list)
@@ -143,6 +183,8 @@ class CreateGarageBucketResponse(BaseModel):
 
 
 class AllowGarageBucketKeyPayload(BaseModel):
+    """Payload for granting an access key permissions on a bucket."""
+
     accessKeyId: str
     bucketId: str
     permissions: GarageBucketKeyPermissions
@@ -153,17 +195,23 @@ class AllowGarageBucketKeyResponse(CreateGarageBucketResponse):
 
 
 class ListGarageKeysResponseItem(BaseModel):
+    """Compact Garage access key item returned by list operations."""
+
     accessKeyId: str
     name: str
 
 
 class ListGarageBucketsResponseItem(BaseModel):
+    """Compact Garage bucket item returned by list operations."""
+
     id: str
     globalAliases: list[str] = Field(default_factory=list)
     localAliases: list[str] = Field(default_factory=list)
 
 
 class DeleteGarageKeyPayload(BaseModel):
+    """Payload for deleting a Garage access key."""
+
     accessKeyId: str
 
 

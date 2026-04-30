@@ -3,13 +3,13 @@
 import re
 from typing import Annotated
 
-from pydantic import AfterValidator, ValidationError
+from pydantic import AfterValidator
 
 
 def is_positive_power_of_two(value: int) -> int:
     """Validate that an integer is a positive power of two."""
     if value <= 0 or (value & (value - 1)) != 0:
-        raise ValidationError(f"{value} is not a positive power of 2")
+        raise ValueError(f"{value} is not a positive power of 2")
     return value
 
 
@@ -29,6 +29,7 @@ _CRON_FIELDS: list[tuple[str, int, int, set[str]]] = [
 
 
 def _validate_cron_field(value: str, name: str, lo: int, hi: int, names: set[str]) -> None:
+    """Validate comma, range, wildcard, and step syntax for one cron field."""
     for item in value.split(","):
         parts = item.split("/")
         if len(parts) > 2:
@@ -51,6 +52,7 @@ def _validate_cron_field(value: str, name: str, lo: int, hi: int, names: set[str
 
 
 def _validate_atom(atom: str, name: str, lo: int, hi: int, names: set[str]) -> None:
+    """Validate a single numeric or named cron atom."""
     if atom.upper() in names:
         return
     if not re.fullmatch(r"\d+", atom):

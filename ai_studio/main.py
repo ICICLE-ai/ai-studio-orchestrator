@@ -10,11 +10,13 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from ai_studio.api import api_router
 from ai_studio.context import REQUEST_ID_VAR
 from ai_studio.core.config import tapis_config
+from ai_studio.exceptions import ServiceError
+from ai_studio.features.studio.routes import router as studio_router
 from ai_studio.logger import configure_logger
 
 configure_logger()
@@ -36,7 +38,10 @@ def _sanitize_request_id(raw: str | None) -> str:
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Attach a sanitized request id to logs and response headers."""
+
     async def dispatch(self, request: Request, call_next):
+        """Set request context, log timing, and add X-Request-ID to the response."""
         request_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
         token = REQUEST_ID_VAR.set(request_id)
         start = time.perf_counter()
@@ -85,7 +90,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         base_url=tapis_config.base_url,
         timeout=httpx.Timeout(connect=5.0, read=30.0, write=30.0, pool=5.0),
     )
-    app.state.lifecycle_locks: dict[str, asyncio.Lock] = {}
+    # Shared by request-scoped StudioService instances to serialize mutations for
+    # the same per-user studio resource within this orchestrator process.
+    lifecycle_locks: dict[str, asyncio.Lock] = {}
+    app.state.lifecycle_locks = lifecycle_locks
     try:
         yield
     finally:
@@ -104,11 +112,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(RequestIDMiddleware)
-app.include_router(api_router)
+app.include_router(studio_router)
+
+
+@app.exception_handler(ServiceError)
+async def service_error_handler(
+    request: Request,
+    error: ServiceError,
+) -> JSONResponse:
+    """Translate structured service errors into JSON HTTP responses."""
+    logger.warning(
+        "request.service_error method=%s path=%s status=%d error=%s",
+        request.method,
+        request.url.path,
+        error.status_code,
+        type(error).__name__,
+    )
+    return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
 
 
 @app.get("/health", include_in_schema=False)
 async def health():
+    """Return a minimal readiness response for load balancers."""
     return {"status": "ok"}
 
 

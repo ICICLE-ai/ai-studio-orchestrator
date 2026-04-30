@@ -8,14 +8,20 @@ from fastapi.security import APIKeyHeader
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from ai_studio.api.dependencies import (
+from ai_studio.shared.dependencies import (
     get_client,
     get_garage_client,
     get_lifecycle_locks,
     get_tapis_clients,
 )
 from ai_studio.adapters.tapis.auth import schemas as auth_schemas
-from ai_studio.features.studio.schemas import StudioLifecycleResult, StudioResponse
+from ai_studio.features.studio.schemas import (
+    StudioLifecycleResult,
+    StudioProvisionOptionsResponse,
+    StudioProvisionRequest,
+    StudioResponse,
+    get_studio_provision_options,
+)
 from ai_studio.features.studio.service import StudioService, TapisClients
 
 router = APIRouter(prefix="/api")
@@ -24,14 +30,33 @@ router = APIRouter(prefix="/api")
 def get_studio_service(
     tapis: Annotated[TapisClients, Depends(get_tapis_clients)],
     garage=Depends(get_garage_client),
-    client: AsyncClient = Depends(get_client),
+    http_client: AsyncClient = Depends(get_client),
     lifecycle_locks: dict[str, asyncio.Lock] = Depends(get_lifecycle_locks),
 ) -> StudioService:
+    """Build the request-scoped studio orchestration service."""
+    # Keep the adapters and shared transport separate: ``tapis`` owns API
+    # semantics, while ``http_client`` owns connection pooling and timeouts.
     return StudioService(
         tapis=tapis,
         garage=garage,
-        tapis_client=client,
+        http_client=http_client,
         lifecycle_locks=lifecycle_locks,
+    )
+
+
+@router.get(
+    "/studio/options",
+    summary="List studio provisioning options",
+    description="Return frontend-safe provisioning profiles and constraints.",
+    response_description="Studio provisioning options.",
+)
+async def get_studio_options() -> StudioResponse[StudioProvisionOptionsResponse]:
+    """Return provisioning profiles and constraints for frontend controls."""
+    return StudioResponse(
+        status=status.HTTP_200_OK,
+        version=1,
+        message="Studio provisioning options",
+        result=get_studio_provision_options(),
     )
 
 
@@ -46,8 +71,10 @@ async def create_studio(
         str, Security(APIKeyHeader(name="X-Tapis-Token", auto_error=True))
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
+    provision: StudioProvisionRequest | None = None,
 ) -> StudioResponse[auth_schemas.TapisUserInfo]:
-    user = await service.provision_studio(SecretStr(token))
+    """Provision all per-user studio resources for the authenticated caller."""
+    user = await service.provision_studio(SecretStr(token), provision)
     return StudioResponse(
         status=status.HTTP_200_OK,
         version=1,
@@ -68,6 +95,7 @@ async def start_studio(
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
 ) -> StudioResponse[StudioLifecycleResult]:
+    """Start provisioned studio pods for the authenticated caller."""
     result = await service.start_studio(SecretStr(token))
     return StudioResponse(
         status=status.HTTP_200_OK,
@@ -89,6 +117,7 @@ async def stop_studio(
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
 ) -> StudioResponse[StudioLifecycleResult]:
+    """Stop running studio pods for the authenticated caller."""
     result = await service.stop_studio(SecretStr(token))
     return StudioResponse(
         status=status.HTTP_200_OK,
@@ -110,6 +139,7 @@ async def delete_studio(
     ],
     service: Annotated[StudioService, Depends(get_studio_service)],
 ) -> StudioResponse[StudioLifecycleResult]:
+    """Delete studio pods, volumes, and routing for the authenticated caller."""
     result = await service.delete_studio(SecretStr(token))
     return StudioResponse(
         status=status.HTTP_200_OK,

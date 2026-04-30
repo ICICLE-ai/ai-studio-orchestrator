@@ -43,6 +43,7 @@ class TapisVaultClient:
     async def read_secret(
         self, secret_id: str, token: SecretStr, client: httpx.AsyncClient
     ) -> ReadTapisSecretResponse:
+        """Read a user-scoped secret from Tapis Vault."""
         logger.debug("vault.read_secret secret_id=%s", secret_id)
         return await self._make_request(
             client=client,
@@ -59,6 +60,7 @@ class TapisVaultClient:
         token: SecretStr,
         client: httpx.AsyncClient,
     ) -> WriteTapisSecretResponse:
+        """Write or replace a user-scoped secret in Tapis Vault."""
         logger.info("vault.write_secret secret_id=%s", secret_id)
         return await self._make_request(
             client=client,

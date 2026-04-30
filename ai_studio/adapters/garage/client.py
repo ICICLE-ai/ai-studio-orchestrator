@@ -45,6 +45,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> dict[str, str]:
+        """Build Garage admin headers with both Garage and Tapis credentials."""
         return {
             "Authorization": f"Bearer {garage_admin_token.get_secret_value()}",
             "X-Tapis-Token": tapis_token.get_secret_value(),
@@ -122,6 +123,7 @@ class GarageClient:
     async def get_health(
         self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: SecretStr
     ) -> GetGarageHealthResponse:
+        """Return Garage cluster health from the admin API."""
         return await self._make_request(
             client=client,
             method="GET",
@@ -134,6 +136,7 @@ class GarageClient:
     async def get_cluster_status(
         self, client: httpx.AsyncClient, garage_admin_token: SecretStr, tapis_token: SecretStr
     ) -> GetGarageClusterStatusResponse:
+        """Return Garage cluster node and partition status."""
         return await self._make_request(
             client=client,
             method="GET",
@@ -150,6 +153,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> UpdateGarageClusterLayoutResponse:
+        """Stage Garage cluster layout changes before applying them."""
         return await self._make_request(
             client=client,
             method="POST",
@@ -166,6 +170,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> UpdateGarageClusterLayoutResponse:
+        """Return the current Garage cluster layout and staged changes."""
         return await self._make_request(
             client=client,
             method="GET",
@@ -182,6 +187,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> ApplyGarageClusterLayoutResponse:
+        """Apply the staged Garage layout version."""
         return await self._make_request(
             client=client,
             method="POST",
@@ -199,6 +205,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> CreateGarageKeyResponse:
+        """Create a Garage access key and return its one-time secret."""
         return await self._make_request(
             client=client,
             method="POST",
@@ -216,6 +223,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> CreateGarageBucketResponse:
+        """Create a Garage bucket with the requested global alias."""
         return await self._make_request(
             client=client,
             method="POST",
@@ -233,6 +241,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> AllowGarageBucketKeyResponse:
+        """Grant an existing Garage key permissions on a bucket."""
         return await self._make_request(
             client=client,
             method="POST",
@@ -269,6 +278,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> list[ListGarageKeysResponseItem]:
+        """List Garage access keys visible to the admin token."""
         return await self._make_list_request(
             client=client,
             url="/v2/ListKeys",
@@ -283,6 +293,7 @@ class GarageClient:
         garage_admin_token: SecretStr,
         tapis_token: SecretStr,
     ) -> list[ListGarageBucketsResponseItem]:
+        """List Garage buckets visible to the admin token."""
         return await self._make_list_request(
             client=client,
             url="/v2/ListBuckets",

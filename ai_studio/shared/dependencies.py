@@ -1,4 +1,4 @@
-"""FastAPI dependency providers used by AI Studio API routes."""
+"""FastAPI dependency providers used by AI Studio routes."""
 
 import asyncio
 
@@ -13,14 +13,7 @@ from ai_studio.features.studio.service import TapisClients
 
 
 def get_client(request: Request) -> httpx.AsyncClient:
-    """Return the shared HTTP client stored on FastAPI application state.
-
-    Args:
-        request: Incoming FastAPI request.
-
-    Returns:
-        Shared async HTTP client configured during app startup.
-    """
+    """Return the shared HTTP client stored on FastAPI application state."""
     return request.app.state.client
 
 
@@ -30,6 +23,7 @@ def get_lifecycle_locks(request: Request) -> dict[str, asyncio.Lock]:
 
 
 def get_tapis_clients() -> TapisClients:
+    """Build the typed Tapis adapter bundle for a request."""
     return TapisClients(
         auth=TapisAuthClient(),
         pods=TapisPodsClient(),
@@ -38,4 +32,5 @@ def get_tapis_clients() -> TapisClients:
 
 
 def get_garage_client() -> GarageClient:
+    """Build the Garage adapter used by studio provisioning."""
     return GarageClient()

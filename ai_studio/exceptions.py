@@ -20,6 +20,7 @@ class ServiceError(Exception):
     """Base exception for errors originating from external service calls."""
 
     def __init__(self, status_code: int, detail: dict) -> None:
+        """Store an HTTP-style status code and structured error detail."""
         detail = _truncate_details(detail)
         self.status_code = status_code
         self.detail = detail
