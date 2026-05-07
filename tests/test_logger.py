@@ -5,13 +5,13 @@ import logging
 import re
 import unittest
 
-from ai_studio.context import REQUEST_ID_VAR
-from ai_studio.logger import (
+from ai_studio_orchestrator.context import REQUEST_ID_VAR
+from ai_studio_orchestrator.logger import (
     JsonFormatter,
     PassThroughQueueHandler,
     RequestIDFilter,
 )
-from ai_studio.main import _sanitize_request_id
+from ai_studio_orchestrator.main import _sanitize_request_id
 
 
 _UUID_RE = re.compile(
@@ -89,7 +89,7 @@ class RequestIDFilterTest(unittest.TestCase):
 class JsonFormatterTest(unittest.TestCase):
     def _record(self, **kwargs) -> logging.LogRecord:
         defaults = dict(
-            name="ai_studio.test",
+            name="ai_studio_orchestrator.test",
             level=logging.INFO,
             pathname=__file__,
             lineno=42,
@@ -108,7 +108,7 @@ class JsonFormatterTest(unittest.TestCase):
         payload = json.loads(line)
 
         self.assertEqual(payload["level"], "INFO")
-        self.assertEqual(payload["logger"], "ai_studio.test")
+        self.assertEqual(payload["logger"], "ai_studio_orchestrator.test")
         self.assertEqual(payload["message"], "hello world")
         self.assertEqual(payload["request_id"], "rid-1")
         self.assertEqual(payload["lineno"], 42)

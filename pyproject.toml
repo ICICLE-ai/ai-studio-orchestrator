@@ -1,5 +1,5 @@
 [project]
-name = "ai-studio"
+name = "ai-studio-orchestrator"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -10,6 +10,10 @@ dependencies = [
     "fastapi[standard-no-fastapi-cloud-cli]>=0.128.0",
 ]
 
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
 [dependency-groups]
 dev = ["pytest>=8.0.0", "pytest-asyncio>=1.0.0", "ruff>=0.9.0", "pyrefly>=0.19.0"]
 
@@ -17,5 +21,5 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=1.0.0", "ruff>=0.9.0", "pyrefly>=0.19.0
 asyncio_mode = "auto"
 
 [tool.pyrefly]
-project-includes = ["ai_studio/**/*.py"]
-search-path = ["."]
+project-includes = ["src/ai_studio_orchestrator/**/*.py"]
+search-path = ["src"]

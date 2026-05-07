@@ -5,8 +5,8 @@ import unittest
 import httpx
 from pydantic import BaseModel
 
-from ai_studio.adapters.http import make_list_request, make_request
-from ai_studio.exceptions import (
+from ai_studio_orchestrator.adapters.http import make_list_request, make_request
+from ai_studio_orchestrator.exceptions import (
     AuthenticationError,
     InvalidResponseError,
     ServiceUnavailableError,

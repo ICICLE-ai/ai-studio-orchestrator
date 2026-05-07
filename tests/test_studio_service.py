@@ -14,10 +14,10 @@ os.environ.setdefault("TAPIS_ADMIN_TOKEN", "admin-token")
 os.environ.setdefault("TAPIS_BASE_URL", "https://tapis.test")
 os.environ.setdefault("TAPIS_TENANT", "testtenant")
 
-from ai_studio.adapters.tapis.auth import schemas as auth_schemas
-from ai_studio.core import tapis_config
-from ai_studio.exceptions import InvalidResponseError, UpstreamServiceError
-from ai_studio.features.studio.schemas import (
+from ai_studio_orchestrator.adapters.tapis.auth import schemas as auth_schemas
+from ai_studio_orchestrator.core import tapis_config
+from ai_studio_orchestrator.exceptions import InvalidResponseError, UpstreamServiceError
+from ai_studio_orchestrator.features.studio.schemas import (
     StudioLifecycleOptions,
     StudioPodResourceOptions,
     StudioProvisionRequest,
@@ -27,7 +27,7 @@ from ai_studio.features.studio.schemas import (
     get_studio_provision_options,
     resolve_studio_provision_config,
 )
-from ai_studio.features.studio.service import (
+from ai_studio_orchestrator.features.studio.service import (
     StudioService,
     TapisClients,
     _resource_id_for_username,

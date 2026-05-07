@@ -2,8 +2,8 @@
 
 from fastapi.testclient import TestClient
 
-from ai_studio.exceptions import UpstreamServiceError
-from ai_studio.main import app
+from ai_studio_orchestrator.exceptions import UpstreamServiceError
+from ai_studio_orchestrator.main import app
 
 
 def test_service_error_handler_returns_structured_status():

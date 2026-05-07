@@ -12,9 +12,9 @@ wheels = [
 ]
 
 [[package]]
-name = "ai-studio"
+name = "ai-studio-orchestrator"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "bentoml" },
     { name = "dvc" },

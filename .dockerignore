@@ -1,83 +1,74 @@
-# Git
-.git
+# ──────────────────────────────────────────────────────────────────────────
+# ICICLE .dockerignore template
+# Keeps build context small and prevents secrets / junk from entering images.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Version control
+.git/
 .gitignore
 .gitattributes
 
-# Python
+# Python artifacts
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-.python-version
-
-# Virtual environments
 .venv/
 venv/
 env/
-ENV/
-
-# Testing
+*.egg-info/
+*.egg
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
-.tox/
+.coverage.*
 htmlcov/
-*.cover
-.hypothesis/
-tests/
+.tox/
+.nox/
 
-# IDEs
+# Environments & secrets — NEVER bake these into images
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+.secrets/
+
+# IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# Environment & Secrets
-.env
-.env.*
-*.key
-*.pem
-
-# Documentation
-README.md
-docs/
-*.md
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-.circleci/
-
-# Docker
-Dockerfile
-Dockerfile.*
-docker-compose*.yml
-.dockerignore
-
-# Logs
-*.log
-logs/
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Claude Code / tooling state
-.claude/
-.memsearch/
+# CI / local tooling output
+.github/
+dist/
+build/
+*.log
+logs/
 
-# Development
-tmp/
-temp/
-*.tmp
+# Docker itself — don't recurse
+Dockerfile
+.dockerignore
 
-# Just
-justfile
+# Documentation (usually not needed in image)
+docs/
+*.md
+!README.md
 
-
-# Kulala
-kulala/
+# Data / notebooks (opt-in if your service needs them)
+*.ipynb
+.ipynb_checkpoints/
+data/
+*.csv
+*.parquet
+*.h5
+*.hdf5

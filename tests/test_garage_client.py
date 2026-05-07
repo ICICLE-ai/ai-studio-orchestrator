@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock
 
 from pydantic import SecretStr
 
-from ai_studio.adapters.garage.client import GarageClient
-from ai_studio.adapters.garage.schemas import ListGarageKeysResponseItem
-from ai_studio.exceptions import GarageKeyConflictError
+from ai_studio_orchestrator.adapters.garage.client import GarageClient
+from ai_studio_orchestrator.adapters.garage.schemas import ListGarageKeysResponseItem
+from ai_studio_orchestrator.exceptions import GarageKeyConflictError
 
 
 class GarageClientTest(unittest.IsolatedAsyncioTestCase):
