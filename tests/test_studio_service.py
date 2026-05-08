@@ -1,7 +1,6 @@
 """Tests for studio lifecycle orchestration behavior."""
 
 import asyncio
-import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -9,10 +8,6 @@ import unittest
 from unittest.mock import AsyncMock
 
 from pydantic import SecretStr, ValidationError
-
-os.environ.setdefault("TAPIS_ADMIN_TOKEN", "admin-token")
-os.environ.setdefault("TAPIS_BASE_URL", "https://tapis.test")
-os.environ.setdefault("TAPIS_TENANT", "testtenant")
 
 from ai_studio_orchestrator.adapters.tapis.auth import schemas as auth_schemas
 from ai_studio_orchestrator.core import tapis_config

@@ -1,5 +1,6 @@
 # Python-generated files
 __pycache__/
+*/__pycache__/
 *.py[oc]
 build/
 dist/
@@ -18,6 +19,7 @@ wheels/
 # Claude Code / tooling state
 .claude/
 .memsearch/
+.codex/
 
 # Kulala
 http-client.env.json
