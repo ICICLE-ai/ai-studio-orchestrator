@@ -2,21 +2,20 @@
 # https://just.systems
 # CMake build system
 
-set dotenv-load := true
-set export := true
+set dotenv-load
+set export
 
 default:
     @just --list
 
 build:
-  docker buildx build -t ghcr.io/icicle-ai/ai-studio:latest .
+    nerdctl build --build-arg PYTHON_VERSION=3.14 -t ai-studio-orchestrator:latest .
 
 start:
-  docker run -it -p 8000:8000 --env-file=.env --name ai-studio ghcr.io/icicle-ai/ai-studio:latest
+    nerdctl run -it -p 8000:8000 --env-file=.env --name ai-studio ghcr.io/icicle-ai/ai-studio:latest
 
 rm:
-  docker rm ai-studio
+    nerdctl rm ai-studio
 
 stop:
-  docker stop ai-studio
-
+    nerdctl stop ai-studio
